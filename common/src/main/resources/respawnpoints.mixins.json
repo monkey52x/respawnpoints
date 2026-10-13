@@ -1,0 +1,24 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.vlogf.respawnpoints.mixin",
+  "refmap": "${mod_id}.refmap.json",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "MixinServerPlayerSpawnTracking",
+    "MixinPlayerRespawnData",
+    "MixinWarpBlindRespawn",
+    "MixinServerLevelBlockTracking",
+    "ServerPlayerRespawnAccessor"
+  ],
+  "client": [
+    "MixinMinecraft",
+    "MixinClientPacketListenerRespawn",
+    "MixinDeathScreenOpened",
+    "DeathScreenAccessor"
+  ],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

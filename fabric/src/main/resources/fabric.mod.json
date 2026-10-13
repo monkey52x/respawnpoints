@@ -1,0 +1,44 @@
+{
+    "schemaVersion": 1,
+    "id": "${mod_id}",
+    "version": "${version}",
+    "name": "${mod_name}",
+    "description": "${description}",
+    "authors": [
+        "${mod_author}"
+    ],
+    "contact": {
+        "homepage": "",
+        "sources": ""
+    },
+    "license": "${license}",
+    "environment": "*",
+    "entrypoints": {
+        "main": [
+            "com.vlogf.respawnpoints.RespawnPointsFabric"
+        ],
+        "client": [
+            "com.vlogf.respawnpoints.RespawnPointsFabricClient"
+        ],
+        "modmenu": [
+            "com.vlogf.respawnpoints.fabric.ModMenuIntegration"
+        ]
+    },
+    "mixins": [
+        "${mod_id}.mixins.json",
+        "${mod_id}.fabric.mixins.json"
+    ],
+    "depends": {
+        "fabricloader": ">=${fabric_loader_version}",
+        "fabric-api": "*",
+        "minecraft": "${minecraft_version}",
+        "java": ">=${java_version}"
+    },
+    "suggests": {
+        "xaerominimap": "*",
+        "xaeroworldmap": "*",
+        "journeymap": "*",
+        "yet_another_config_lib_v3": "*",
+        "modmenu": "*"
+    }
+}

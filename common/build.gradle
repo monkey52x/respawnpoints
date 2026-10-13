@@ -1,0 +1,53 @@
+plugins {
+    id 'multiloader-common'
+    id 'net.neoforged.moddev'
+}
+
+neoForge {
+    neoFormVersion = neo_form_version
+    // Automatically enable AccessTransformers if the file exists
+    def at = file('src/main/resources/META-INF/accesstransformer.cfg')
+    if (at.exists()) {
+        accessTransformers.from(at.absolutePath)
+    }
+    parchment {
+        minecraftVersion = parchment_minecraft
+        mappingsVersion = parchment_version
+    }
+}
+
+dependencies {
+    compileOnly group: 'org.spongepowered', name: 'mixin', version: '0.8.5'
+    // fabric and neoforge both bundle mixinextras, so it is safe to use it in common
+    compileOnly group: 'io.github.llamalad7', name: 'mixinextras-common', version: '0.3.5'
+    annotationProcessor group: 'io.github.llamalad7', name: 'mixinextras-common', version: '0.3.5'
+
+    // Optional map integrations: compileOnly only, never bundled (JarJar disabled).
+    // Isolated implementation classes are loaded reflectively, so the mod runs without them.
+    compileOnly "xaero.minimap:xaerominimap-common-${xaero_mc_version}:${xaero_version}"
+    compileOnly "xaero.map:xaeroworldmap-common-${xaero_mc_version}:${xaero_worldmap_version}"
+    compileOnly "xaero.lib:xaerolib-common-${xaero_mc_version}:${xaero_lib_version}"
+    compileOnly group: 'info.journeymap', name: 'journeymap-api-common', version: "${journeymap_api_version}"
+    // Optional config screen: compileOnly only, never bundled (JarJar disabled).
+    // Loaded reflectively/guarded, so the mod runs without YACL.
+    // No common artifact exists: common compiles in Mojmap, so it uses the
+    // neoforge artifact; loom remaps the references for the Fabric jar.
+    compileOnly "dev.isxander:yet-another-config-lib:${yacl_version_neoforge}"
+}
+
+configurations {
+    commonJava {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+    commonResources {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+}
+
+artifacts {
+    commonJava sourceSets.main.java.sourceDirectories.singleFile
+    commonResources sourceSets.main.resources.sourceDirectories.singleFile
+}
+
