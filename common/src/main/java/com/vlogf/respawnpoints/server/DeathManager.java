@@ -606,6 +606,21 @@ public final class DeathManager {
         pushUpdate(player);
     }
 
+    /** Rename one of the player's bound points, skipping the push when unchanged. */
+    public static void onRenameIfChanged(ServerPlayer player, String pointId, String name) {
+        if (pointId == null || pointId.length() > 128 || name == null) {
+            return;
+        }
+        String clean = name.trim();
+        if (clean.isEmpty() || clean.length() > 32) {
+            return;
+        }
+        if (clean.equals(PlayerRespawnData.customName(player, pointId))) {
+            return;
+        }
+        onRename(player, pointId, clean);
+    }
+
     /** Reset a bound point's name to the default (clears the custom name). */
     public static void onRenameReset(ServerPlayer player, String pointId) {
         if (pointId == null || pointId.length() > 128) {

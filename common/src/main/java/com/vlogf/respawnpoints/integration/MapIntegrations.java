@@ -6,9 +6,7 @@ import com.vlogf.respawnpoints.client.RespawnClientConfig;
 import com.vlogf.respawnpoints.model.RespawnEntry;
 import com.vlogf.respawnpoints.platform.Services;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Optional map integrations. Implementation classes reference third-party APIs
@@ -50,55 +48,6 @@ public final class MapIntegrations {
                 && isJourneyMapPresent()) {
             invoke(JOURNEYMAP_SYNC, entries);
         }
-    }
-
-    /**
-     * Current map-side waypoint color for one entry, if the map shows it.
-     * Used for explicit pushes (rename screen Save): map edits are otherwise
-     * only noticed on the next waypoint sync, which may come much later.
-     */
-    public static Optional<Integer> currentMapRgb(String entryId, String dimension) {
-        if (!Services.PLATFORM.isModLoaded("xaerominimap")) {
-            return Optional.empty();
-        }
-        try {
-            Class<?> sync = Class.forName(XAERO_SYNC);
-            Object rgb = sync.getMethod("mapRgbFor", String.class, String.class)
-                    .invoke(null, dimension, entryId);
-            return Optional.ofNullable((Integer) rgb);
-        } catch (ReflectiveOperationException | LinkageError | ClassCastException e) {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Palette hexes for our pickers: the exact Xaero palette when the minimap
-     * is present, vanilla dye colors otherwise. Either way the server accepts
-     * any RGB, so the screen works everywhere.
-     */
-    public static List<Integer> paletteHexes() {
-        if (Services.PLATFORM.isModLoaded("xaerominimap")) {
-            try {
-                Class<?> palette = Class.forName(
-                        "com.vlogf.respawnpoints.integration.xaero.XaeroPalette");
-                Object hexes = palette.getMethod("fetchHexes").invoke(null);
-                @SuppressWarnings("unchecked")
-                List<Integer> list = (List<Integer>) hexes;
-                if (list != null && !list.isEmpty()) {
-                    return List.copyOf(list);
-                }
-            } catch (ReflectiveOperationException | LinkageError | ClassCastException e) {
-                // Fall through to vanilla dyes.
-            }
-        }
-        List<Integer> dyes = new ArrayList<>();
-        for (net.minecraft.world.item.DyeColor dye : net.minecraft.world.item.DyeColor.values()) {
-            int hex = dye.getTextColor() & 0xFFFFFF;
-            if (!dyes.contains(hex)) {
-                dyes.add(hex);
-            }
-        }
-        return dyes;
     }
 
     /** Reflective Xaero session check (common code must not import xaero APIs). */    public static boolean isXaeroSessionReady() {

@@ -3,19 +3,14 @@ package com.vlogf.respawnpoints.client.screen;
 import com.vlogf.respawnpoints.integration.MapIntegrations;
 import com.vlogf.respawnpoints.model.RespawnEntry;
 import com.vlogf.respawnpoints.network.DeletePointPacket;
-import com.vlogf.respawnpoints.network.RecolorPointPacket;
 import com.vlogf.respawnpoints.network.RenamePointPacket;
 import com.vlogf.respawnpoints.platform.Services;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /** Small text-input screen to rename a bed/anchor from the respawn flow. */
 public class RenamePointScreen extends Screen {
@@ -24,11 +19,6 @@ public class RenamePointScreen extends Screen {
     private Button unbindButton;
     /** Two-step unbind: first click arms, second click confirms. */
     private boolean unbindArmed;
-    /** Color picker state: an explicit choice wins over any map-side value on save. */
-    private List<Integer> palette = List.of();
-    private final List<Button> colorButtons = new ArrayList<>();
-    private int selectedColor;
-    private boolean colorTouched;
 
     public RenamePointScreen(RespawnEntry entry) {
         super(Component.translatable("respawnpoints.rename.title"));
@@ -62,90 +52,18 @@ public class RenamePointScreen extends Screen {
                 .bounds(x, y + 52, w, 20)
                 .build();
         addRenderableWidget(unbindButton);
-
-        palette = MapIntegrations.paletteHexes();
-        if (!colorTouched) {
-            selectedColor = nearestPalette(entry.color());
-        }
-        colorButtons.clear();
-        int cols = 7;
-        int sw = 24;
-        int sh = 20;
-        int gap = 2;
-        int rowW = cols * (sw + gap) - gap;
-        int sx = x + (w - rowW) / 2;
-        int sy = y + 80;
-        for (int i = 0; i < palette.size(); i++) {
-            int hex = palette.get(i);
-            int bx = sx + (i % cols) * (sw + gap);
-            int by = sy + (i / cols) * (sh + gap);
-            final int swatch = hex;
-            Button swatchButton = Button.builder(swatchMessage(swatch, swatch == selectedColor),
-                            b -> pickColor(swatch))
-                    .bounds(bx, by, sw, sh)
-                    .tooltip(Tooltip.create(Component.literal(String.format("#%06X", swatch))))
-                    .build();
-            addRenderableWidget(swatchButton);
-            colorButtons.add(swatchButton);
-        }
-    }
-
-    private static Component swatchMessage(int hex, boolean selected) {
-        return Component.literal(selected ? "◆" : "■")
-                .withStyle(style -> style.withColor(hex));
-    }
-
-    private void pickColor(int hex) {
-        selectedColor = hex;
-        colorTouched = true;
-        for (int i = 0; i < colorButtons.size() && i < palette.size(); i++) {
-            int swatch = palette.get(i);
-            colorButtons.get(i).setMessage(swatchMessage(swatch, swatch == selectedColor));
-        }
-    }
-
-    /** Exact palette hit, else nearest by RGB distance. */
-    private int nearestPalette(int rgb) {
-        int want = rgb & 0xFFFFFF;
-        for (int hex : palette) {
-            if (hex == want) {
-                return hex;
-            }
-        }
-        int best = want;
-        long bestDist = Long.MAX_VALUE;
-        for (int hex : palette) {
-            int dr = ((want >> 16) & 0xFF) - ((hex >> 16) & 0xFF);
-            int dg = ((want >> 8) & 0xFF) - ((hex >> 8) & 0xFF);
-            int db = (want & 0xFF) - (hex & 0xFF);
-            long dist = (long) dr * dr + (long) dg * dg + (long) db * db;
-            if (dist < bestDist) {
-                bestDist = dist;
-                best = hex;
-            }
-        }
-        return best;
     }
 
     private void save() {
         String name = nameField.getValue().trim();
-        if (!name.isEmpty()) {
+        if (!name.isEmpty() && !name.equals(entry.name())) {
             Services.NETWORK.sendToServer(new RenamePointPacket(entry.id(), name));
         }
-        if (colorTouched && (selectedColor & 0xFFFFFF) != (entry.color() & 0xFFFFFF)) {
-            // Explicit picker choice wins over any map-side value.
-            Services.NETWORK.sendToServer(new RecolorPointPacket(entry.id(), selectedColor));
-        } else {
-            // Unchanged picker: push a map-side recolor (if any) deterministically.
-            // Without this, edits only surface on the next waypoint sync, which
-            // may never come before a relog (bind/death/reload lottery).
-            MapIntegrations.currentMapRgb(entry.id(), entry.dimension())
-                    .ifPresent(rgb -> {
-                        if ((rgb & 0xFFFFFF) != (entry.color() & 0xFFFFFF)) {
-                            Services.NETWORK.sendToServer(new RecolorPointPacket(entry.id(), rgb));
-                        }
-                    });
-        }
+        // Map-side recolors ride the same full sync the death flow uses:
+        // reconcile detects the diff and sends it, so this works with no
+        // death, no timing luck, and no extra lookup paths.
+        MapIntegrations.syncClientWaypoints(
+                com.vlogf.respawnpoints.client.PendingRespawn.entries());
         back();
     }
 
