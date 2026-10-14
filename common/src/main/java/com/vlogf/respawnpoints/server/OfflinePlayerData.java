@@ -102,4 +102,92 @@ public final class OfflinePlayerData {
     public static boolean hasDataFile(MinecraftServer server, UUID uuid) {
         return Files.isRegularFile(playerFile(server, uuid));
     }
+
+    /** Snapshots from an offline player's file (custom names included). Empty when none. */
+    public static java.util.List<PlayerRespawnData.PointSnapshot> readSnapshots(
+            MinecraftServer server, UUID uuid) {
+        java.util.List<PlayerRespawnData.PointSnapshot> out = new java.util.ArrayList<>();
+        CompoundTag root = readPlayerFile(playerFile(server, uuid));
+        if (root == null || !root.contains("RespawnPoints", Tag.TAG_COMPOUND)) {
+            return out;
+        }
+        ListTag points = root.getCompound("RespawnPoints").getList("Points", Tag.TAG_COMPOUND);
+        for (int i = 0; i < points.size(); i++) {
+            if (!(points.get(i) instanceof CompoundTag e)) {
+                continue;
+            }
+            String id = e.getString("Id");
+            if (id.isEmpty()) {
+                continue;
+            }
+            out.add(new PlayerRespawnData.PointSnapshot(
+                    id,
+                    e.getString("Dim"),
+                    new net.minecraft.core.BlockPos(e.getInt("X"), e.getInt("Y"), e.getInt("Z")),
+                    e.getString("Kind"),
+                    e.getString("DefaultName"),
+                    e.getInt("DefaultColor"),
+                    e.getString("Name"),
+                    e.contains("Color") ? e.getInt("Color") : e.getInt("DefaultColor")));
+        }
+        return out;
+    }
+
+    /**
+     * Insert or replace one snapshot in an offline player's file (defaults for
+     * name/color — customs have nowhere to come from). Creates the section
+     * when missing. Vanilla spawn tags are deliberately left alone.
+     *
+     * @return true if the file now contains the snapshot.
+     */
+    public static boolean upsertSnapshot(MinecraftServer server, UUID uuid,
+                                         SpawnRegistry.SpawnPointRecord record) {
+        Path file = playerFile(server, uuid);
+        CompoundTag root = Files.isRegularFile(file) ? readPlayerFile(file) : new CompoundTag();
+        if (root == null) {
+            Constants.LOG.warn("Could not read player data for {}", uuid);
+            return false;
+        }
+        CompoundTag tag = new CompoundTag();
+        if (root.contains("RespawnPoints", Tag.TAG_COMPOUND)) {
+            tag = root.getCompound("RespawnPoints");
+        }
+        ListTag kept = new ListTag();
+        String id = record.id().toString();
+        ListTag points = tag.getList("Points", Tag.TAG_COMPOUND);
+        for (int i = 0; i < points.size(); i++) {
+            Tag t = points.get(i);
+            if (t instanceof CompoundTag e && id.equals(e.getString("Id"))) {
+                continue;
+            }
+            kept.add(t);
+        }
+        CompoundTag e = new CompoundTag();
+        e.putString("Id", id);
+        e.putString("Dim", record.pos().dimension().location().toString());
+        e.putInt("X", record.pos().pos().getX());
+        e.putInt("Y", record.pos().pos().getY());
+        e.putInt("Z", record.pos().pos().getZ());
+        e.putString("Kind", record.kind());
+        e.putString("DefaultName", record.defaultName());
+        e.putInt("DefaultColor", record.color());
+        e.putString("Name", "");
+        e.putInt("Color", record.color());
+        kept.add(e);
+        tag.put("Points", kept);
+        root.put("RespawnPoints", tag);
+        try {
+            if (Files.isRegularFile(file)) {
+                Path bak = file.resolveSibling(file.getFileName() + ".bak");
+                Files.copy(file, bak, StandardCopyOption.REPLACE_EXISTING);
+            }
+            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+            net.minecraft.nbt.NbtIo.writeCompressed(root, tmp);
+            Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            return true;
+        } catch (Exception ex) {
+            Constants.LOG.warn("Could not write player data for {}", uuid, ex);
+            return false;
+        }
+    }
 }

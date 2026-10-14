@@ -726,6 +726,31 @@ public final class DeathManager {
     }
 
     /**
+     * Admin: bind an offline player to an existing record. Mirrors
+     * {@link #adminBind} without live state: registry bind (same limit) plus a
+     * default snapshot straight into the player's file. Vanilla spawn tags are
+     * left alone: bind adds our mark only.
+     *
+     * @return true when the player is now bound.
+     */
+    public static boolean adminBindOffline(net.minecraft.server.MinecraftServer server,
+                                           UUID uuid, String pointId) {
+        UUID id = parseUuid(pointId);
+        SpawnRegistry registry = SpawnRegistry.get(server.overworld());
+        SpawnRegistry.SpawnPointRecord record = id == null ? null : registry.byId(id);
+        if (record == null) {
+            return false;
+        }
+        if (record.boundPlayers().contains(uuid)) {
+            return true;
+        }
+        SpawnRegistry.SpawnPointRecord bound = registry.bind(record.pos().dimension(),
+                record.pos().pos(), record.kind(), record.color(), record.defaultName(),
+                record.charges(), uuid);
+        return OfflinePlayerData.upsertSnapshot(server, uuid, bound);
+    }
+
+    /**
      * Admin: bind any (online) player to an existing record (reuses
      * {@link SpawnRegistry#bind}, so the per-player limit still applies).
      *

@@ -14,6 +14,7 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.nio.file.Path;
 import java.util.UUID;
 
 /**
@@ -65,9 +66,15 @@ public final class RespawnCommands {
         admin.then(Commands.literal("list").executes(ctx -> adminList(ctx.getSource())));
         admin.then(Commands.literal("reload").executes(ctx -> adminReload(ctx.getSource())));
         admin.then(Commands.literal("beds")
-                .then(Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
+                .then(Commands.argument("player", StringArgumentType.string())
+                        .suggests(playerNameSuggestions())
                         .executes(ctx -> adminBeds(ctx.getSource(),
-                                net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player")))));
+                                StringArgumentType.getString(ctx, "player"))))
+                .then(Commands.literal("offline")
+                        .then(Commands.argument("player", StringArgumentType.string())
+                                .suggests(offlinePlayerNameSuggestions())
+                                .executes(ctx -> adminBeds(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "player"))))));
         admin.then(Commands.literal("bedinfo")
                 .then(Commands.argument("id", StringArgumentType.string())
                         .suggests(allBedIdSuggestions())
@@ -90,14 +97,27 @@ public final class RespawnCommands {
                                 .suggests(playerNameSuggestions())
                                 .executes(ctx -> adminUnbind(ctx.getSource(),
                                         StringArgumentType.getString(ctx, "id"),
-                                        StringArgumentType.getString(ctx, "player"))))));
+                                        StringArgumentType.getString(ctx, "player"))))
+                        .then(Commands.literal("offline")
+                                .then(Commands.argument("player", StringArgumentType.string())
+                                        .suggests(offlinePlayerNameSuggestions())
+                                        .executes(ctx -> adminUnbind(ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "id"),
+                                                StringArgumentType.getString(ctx, "player")))))));
         admin.then(Commands.literal("bind")
                 .then(Commands.argument("id", StringArgumentType.string())
                         .suggests(allBedIdSuggestions())
-                        .then(Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
+                        .then(Commands.argument("player", StringArgumentType.string())
+                                .suggests(playerNameSuggestions())
                                 .executes(ctx -> adminBind(ctx.getSource(),
                                         StringArgumentType.getString(ctx, "id"),
-                                        net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player"))))));
+                                        StringArgumentType.getString(ctx, "player"))))
+                        .then(Commands.literal("offline")
+                                .then(Commands.argument("player", StringArgumentType.string())
+                                        .suggests(offlinePlayerNameSuggestions())
+                                        .executes(ctx -> adminBind(ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "id"),
+StringArgumentType.getString(ctx, "player")))))));
 
         var spawn = Commands.literal("spawn");
         spawn.then(Commands.literal("hide").executes(ctx -> setSpawnHidden(ctx.getSource(), true)));
@@ -407,6 +427,43 @@ public final class RespawnCommands {
         return sendBedRows(src, registry, snapshots);
     }
 
+    /** Admin beds by name: online players read live state, offline from registry + file. */
+    private static int adminBeds(CommandSourceStack src, String playerName) {
+        var server = src.getServer();
+        PlayerTarget target = resolvePlayerTarget(src, playerName);
+        if (target.online() != null) {
+            return adminBeds(src, target.online());
+        }
+        if (!target.known()) {
+            src.sendSuccess(() -> tr("respawnpoints.cmd.no_beds_of", playerName), false);
+            return 1;
+        }
+        SpawnRegistry registry = SpawnRegistry.get(server.overworld());
+        java.util.List<PlayerRespawnData.PointSnapshot> snapshots = new java.util.ArrayList<>(
+                OfflinePlayerData.readSnapshots(server, target.uuid()));
+        java.util.Set<String> have = new java.util.HashSet<>();
+        for (var snapshot : snapshots) {
+            have.add(snapshot.id());
+        }
+        // Registry-bound records without a file snapshot still show (defaults).
+        for (var record : registry.allForPlayer(target.uuid())) {
+            if (!have.contains(record.id().toString())) {
+                snapshots.add(new PlayerRespawnData.PointSnapshot(
+                        record.id().toString(),
+                        record.pos().dimension().location().toString(),
+                        record.pos().pos(), record.kind(), record.defaultName(),
+                        record.color(), "", record.color()));
+                have.add(record.id().toString());
+            }
+        }
+        if (snapshots.isEmpty()) {
+            src.sendSuccess(() -> tr("respawnpoints.cmd.no_beds_of",
+                    playerDisplayName(server, target.uuid())), false);
+            return 1;
+        }
+        return sendBedRows(src, registry, snapshots);
+    }
+
     /** Shared bed/anchor row renderer for bed list + admin beds. */
     private static int sendBedRows(CommandSourceStack src, SpawnRegistry registry,
                                    java.util.List<PlayerRespawnData.PointSnapshot> snapshots) {
@@ -554,6 +611,91 @@ public final class RespawnCommands {
         };
     }
 
+    /** Offline-only Tab-complete for the `offline` branches: bound/file players minus online, capped. */
+    private static final int OFFLINE_SUGGEST_CAP = 50;
+
+    private static SuggestionProvider<CommandSourceStack> offlinePlayerNameSuggestions() {
+        return (ctx, builder) -> {
+            var server = ctx.getSource().getServer();
+            if (server != null) {
+                java.util.Set<UUID> seen = new java.util.LinkedHashSet<>();
+                for (var record : SpawnRegistry.get(server.overworld()).all()) {
+                    seen.addAll(record.boundPlayers());
+                }
+                try (var files = java.nio.file.Files.list(server.getWorldPath(
+                        net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR))) {
+                    for (Path file : (Iterable<Path>) files::iterator) {
+                        String name = file.getFileName().toString();
+                        if (name.endsWith(".dat") && !name.endsWith(".bak.dat")
+                                && !name.endsWith(".tmp.dat")) {
+                            try {
+                                seen.add(UUID.fromString(name.substring(0, name.length() - 4)));
+                            } catch (IllegalArgumentException ignored) {
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+                int shown = 0;
+                for (UUID uuid : seen) {
+                    if (shown >= OFFLINE_SUGGEST_CAP) {
+                        break;
+                    }
+                    if (server.getPlayerList().getPlayer(uuid) != null) {
+                        continue;
+                    }
+                    builder.suggest(rawPlayerName(server, uuid));
+                    shown++;
+                }
+            }
+            return builder.buildFuture();
+        };
+    }
+
+    /** Resolved command target: a live player, an offline UUID, or unknown. */
+    private record PlayerTarget(ServerPlayer online, UUID uuid) {
+        static PlayerTarget unknown() {
+            return new PlayerTarget(null, null);
+        }
+
+        boolean known() {
+            return online != null || uuid != null;
+        }
+    }
+
+    /**
+     * Resolve a typed nick/UUID the same way everywhere: online player first,
+     * then profile cache, then offline-mode derivation with a data-file check,
+     * then a raw UUID fallback.
+     */
+    private static PlayerTarget resolvePlayerTarget(CommandSourceStack src, String playerName) {
+        var server = src.getServer();
+        ServerPlayer online = server.getPlayerList().getPlayerByName(playerName);
+        if (online != null) {
+            return new PlayerTarget(online, online.getUUID());
+        }
+        UUID uuid = null;
+        if (server.getProfileCache() != null) {
+            var profile = server.getProfileCache().get(playerName);
+            if (profile.isPresent()) {
+                uuid = profile.get().getId();
+            }
+        }
+        if (uuid == null) {
+            UUID derived = OfflinePlayerData.offlineModeUuid(playerName);
+            if (OfflinePlayerData.hasDataFile(server, derived)) {
+                uuid = derived;
+            }
+        }
+        if (uuid == null) {
+            try {
+                uuid = UUID.fromString(playerName);
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        return uuid == null ? PlayerTarget.unknown() : new PlayerTarget(null, uuid);
+    }
+
     private static int adminUnbind(CommandSourceStack src, String id, ServerPlayer target) {
         if (DeathManager.adminUnbind(target, id)) {
             src.sendSuccess(() -> tr("respawnpoints.cmd.unbound_admin",
@@ -570,34 +712,21 @@ public final class RespawnCommands {
      */
     private static int adminUnbind(CommandSourceStack src, String id, String playerName) {
         var server = src.getServer();
-        ServerPlayer online = server.getPlayerList().getPlayerByName(playerName);
-        if (online != null) {
-            return adminUnbind(src, id, online);
+        PlayerTarget target = resolvePlayerTarget(src, playerName);
+        if (target.online() != null) {
+            return adminUnbind(src, id, target.online());
         }
-        UUID uuid = null;
-        if (server.getProfileCache() != null) {
-            var profile = server.getProfileCache().get(playerName);
-            if (profile.isPresent()) {
-                uuid = profile.get().getId();
-            }
-        }
-        if (uuid == null) {
-            UUID derived = OfflinePlayerData.offlineModeUuid(playerName);
-            if (OfflinePlayerData.hasDataFile(server, derived)) {
-                uuid = derived;
-            }
-        }
-        if (uuid == null) {
+        if (!target.known()) {
             src.sendFailure(tr("respawnpoints.cmd.unknown_or_not_bound", id));
             return 0;
         }
         // Raced login between resolve and edit: take the live path instead of the file.
-        ServerPlayer raced = server.getPlayerList().getPlayer(uuid);
+        ServerPlayer raced = server.getPlayerList().getPlayer(target.uuid());
         if (raced != null) {
             return adminUnbind(src, id, raced);
         }
-        if (DeathManager.adminUnbindOffline(server, uuid, id)) {
-            final String name = playerDisplayName(server, uuid);
+        if (DeathManager.adminUnbindOffline(server, target.uuid(), id)) {
+            final String name = playerDisplayName(server, target.uuid());
             src.sendSuccess(() -> tr("respawnpoints.cmd.unbound_admin", name, id), true);
             return 1;
         }
@@ -609,6 +738,30 @@ public final class RespawnCommands {
         if (DeathManager.adminBind(target, id)) {
             src.sendSuccess(() -> tr("respawnpoints.cmd.bound_admin",
                     target.getScoreboardName(), id), true);
+            return 1;
+        }
+        src.sendFailure(tr("respawnpoints.cmd.unknown_point", id));
+        return 0;
+    }
+
+    /** Admin bind by name: online players take the live path, offline go to registry + file. */
+    private static int adminBind(CommandSourceStack src, String id, String playerName) {
+        var server = src.getServer();
+        PlayerTarget target = resolvePlayerTarget(src, playerName);
+        if (target.online() != null) {
+            return adminBind(src, id, target.online());
+        }
+        if (!target.known()) {
+            src.sendFailure(tr("respawnpoints.cmd.unknown_point", id));
+            return 0;
+        }
+        ServerPlayer raced = server.getPlayerList().getPlayer(target.uuid());
+        if (raced != null) {
+            return adminBind(src, id, raced);
+        }
+        if (DeathManager.adminBindOffline(server, target.uuid(), id)) {
+            final String name = playerDisplayName(server, target.uuid());
+            src.sendSuccess(() -> tr("respawnpoints.cmd.bound_admin", name, id), true);
             return 1;
         }
         src.sendFailure(tr("respawnpoints.cmd.unknown_point", id));
