@@ -54,11 +54,7 @@ public class MixinClientPacketListenerRespawn {
                 return;
             }
             if (PendingRespawn.hasEmptyOffer()) {
-                // Server answered: nothing to choose — vanilla at once, no waiting.
-                if (minecraft.gui != null) {
-                    minecraft.gui.setOverlayMessage(
-                            net.minecraft.network.chat.Component.translatable("respawnpoints.screen.no_points"), false);
-                }
+                // Server answered: nothing to choose — vanilla at once, silently.
                 return;
             }
             // Same waiting flow as the main screen: our server, offer not here yet.
@@ -89,11 +85,7 @@ public class MixinClientPacketListenerRespawn {
             return;
         }
         if (PendingRespawn.hasEmptyOffer()) {
-            // Server answered: nothing to choose — vanilla at once, no waiting.
-            if (minecraft.gui != null) {
-                minecraft.gui.setOverlayMessage(
-                        net.minecraft.network.chat.Component.translatable("respawnpoints.screen.no_points"), false);
-            }
+            // Server answered: nothing to choose — vanilla at once, silently.
             return;
         }
         if (!ClientReadiness.hasHello()) {

@@ -61,14 +61,9 @@ public final class ClientHandlers {
         MapIntegrations.syncClientWaypoints(packet.entries());
         if (!liveSync && packet.entries().isEmpty()) {
             // Explicit "nothing to choose": drop any waiting state at once so
-            // the player falls through to vanilla instead of hanging on
-            // "requesting points" until the timeout. Nothing to open/refresh.
+            // the player falls through to vanilla silently. Nothing to open.
             ClientReadiness.clearWaiting();
             var mc = Minecraft.getInstance();
-            if (mc.gui != null) {
-                mc.gui.setOverlayMessage(
-                        net.minecraft.network.chat.Component.translatable("respawnpoints.screen.no_points"), false);
-            }
             // The last point vanished by any path (delete, break, admin):
             // an open selection would go stale, back to vanilla instead.
             if (mc.player != null && !mc.player.isAlive()) {

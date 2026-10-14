@@ -50,6 +50,10 @@ public class MixinServerPlayerSpawnTracking {
             if (PlayerRespawnData.isBlocked(self, dimName, headPos)) {
                 return;
             }
+            // Already tracked: re-sleep changes nothing, skip snapshot/push spam.
+            if (registry.isBound(dimension, headPos, self.getUUID())) {
+                return;
+            }
             int color = bedBlock.getColor().getTextColor();
             String defaultName = prettifyDye(bedBlock.getColor().getName()) + " Bed";
             SpawnRegistry.SpawnPointRecord record = registry.bind(dimension, headPos, "BED",

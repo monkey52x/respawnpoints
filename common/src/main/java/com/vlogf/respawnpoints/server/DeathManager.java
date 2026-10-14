@@ -688,6 +688,29 @@ public final class DeathManager {
     }
 
     /**
+     * Admin: unbind an offline player. Registry is canonical and always
+     * available; the player's file is edited directly (atomic + .bak) since
+     * no live state exists. Vanilla spawn tags are left alone: unbind removes
+     * our mark only.
+     *
+     * @return true when the binding was removed.
+     */
+    public static boolean adminUnbindOffline(net.minecraft.server.MinecraftServer server,
+                                             UUID uuid, String pointId) {
+        UUID id = parseUuid(pointId);
+        SpawnRegistry registry = SpawnRegistry.get(server.overworld());
+        SpawnRegistry.SpawnPointRecord record = id == null ? null : registry.byId(id);
+        if (record == null || !record.boundPlayers().contains(uuid)) {
+            return false;
+        }
+        if (!OfflinePlayerData.dropPoint(server, uuid, record.id().toString())) {
+            return false;
+        }
+        registry.unbind(record.id(), uuid);
+        return true;
+    }
+
+    /**
      * Admin: bind any (online) player to an existing record (reuses
      * {@link SpawnRegistry#bind}, so the per-player limit still applies).
      *

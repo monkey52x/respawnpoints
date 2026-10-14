@@ -14,6 +14,8 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.UUID;
+
 /**
  * {@code /respawnpoints warp add|del|list}, {@code /respawnpoints bed list|rename|remove},
  * {@code /respawnpoints spawn hide|show}. Registered by each loader.
@@ -84,10 +86,11 @@ public final class RespawnCommands {
         admin.then(Commands.literal("unbind")
                 .then(Commands.argument("id", StringArgumentType.string())
                         .suggests(allBedIdSuggestions())
-                        .then(Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
+                        .then(Commands.argument("player", StringArgumentType.string())
+                                .suggests(playerNameSuggestions())
                                 .executes(ctx -> adminUnbind(ctx.getSource(),
                                         StringArgumentType.getString(ctx, "id"),
-                                        net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player"))))));
+                                        StringArgumentType.getString(ctx, "player"))))));
         admin.then(Commands.literal("bind")
                 .then(Commands.argument("id", StringArgumentType.string())
                         .suggests(allBedIdSuggestions())
@@ -474,10 +477,29 @@ public final class RespawnCommands {
                         ChatFormatting.RED));
                 lines.add(line);
             } else {
-                lines.add(Component.literal("- " + playerDisplayName(server, uuid)));
+                // Offline players get the same one-click button: the command
+                // accepts nicks (profile cache) and raw UUIDs, so no typing.
+                MutableComponent line = Component.literal("- " + playerDisplayName(server, uuid) + " ");
+                line.append(chatButton(
+                        tr("respawnpoints.cmd.bedinfo_unbind_hint"),
+                        ClickEvent.Action.RUN_COMMAND,
+                        "/respawnpoints admin unbind " + record.id() + " " + rawPlayerName(server, uuid),
+                        ChatFormatting.RED));
+                lines.add(line);
             }
         }
         return lines;
+    }
+
+    /** Raw command-safe identifier for a possibly-offline player: nick if known, else UUID. */
+    static String rawPlayerName(net.minecraft.server.MinecraftServer server, java.util.UUID uuid) {
+        if (server.getProfileCache() != null) {
+            var profile = server.getProfileCache().get(uuid);
+            if (profile.isPresent()) {
+                return profile.get().getName();
+            }
+        }
+        return uuid.toString();
     }
 
     /** Action row for the inspect card: players list + prefilled add/remove. */
@@ -519,10 +541,64 @@ public final class RespawnCommands {
         return uuid.toString() + " (offline)";
     }
 
+    /** Online player names for Tab-complete (offline names are typed by hand). */
+    private static SuggestionProvider<CommandSourceStack> playerNameSuggestions() {
+        return (ctx, builder) -> {
+            var server = ctx.getSource().getServer();
+            if (server != null) {
+                for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+                    builder.suggest(online.getGameProfile().getName());
+                }
+            }
+            return builder.buildFuture();
+        };
+    }
+
     private static int adminUnbind(CommandSourceStack src, String id, ServerPlayer target) {
         if (DeathManager.adminUnbind(target, id)) {
             src.sendSuccess(() -> tr("respawnpoints.cmd.unbound_admin",
                     target.getScoreboardName(), id), true);
+            return 1;
+        }
+        src.sendFailure(tr("respawnpoints.cmd.unknown_or_not_bound", id));
+        return 0;
+    }
+
+    /**
+     * Admin unbind by name: online players take the live path, offline players
+     * are edited on disk (registry + playerdata file, atomic + .bak).
+     */
+    private static int adminUnbind(CommandSourceStack src, String id, String playerName) {
+        var server = src.getServer();
+        ServerPlayer online = server.getPlayerList().getPlayerByName(playerName);
+        if (online != null) {
+            return adminUnbind(src, id, online);
+        }
+        UUID uuid = null;
+        if (server.getProfileCache() != null) {
+            var profile = server.getProfileCache().get(playerName);
+            if (profile.isPresent()) {
+                uuid = profile.get().getId();
+            }
+        }
+        if (uuid == null) {
+            UUID derived = OfflinePlayerData.offlineModeUuid(playerName);
+            if (OfflinePlayerData.hasDataFile(server, derived)) {
+                uuid = derived;
+            }
+        }
+        if (uuid == null) {
+            src.sendFailure(tr("respawnpoints.cmd.unknown_or_not_bound", id));
+            return 0;
+        }
+        // Raced login between resolve and edit: take the live path instead of the file.
+        ServerPlayer raced = server.getPlayerList().getPlayer(uuid);
+        if (raced != null) {
+            return adminUnbind(src, id, raced);
+        }
+        if (DeathManager.adminUnbindOffline(server, uuid, id)) {
+            final String name = playerDisplayName(server, uuid);
+            src.sendSuccess(() -> tr("respawnpoints.cmd.unbound_admin", name, id), true);
             return 1;
         }
         src.sendFailure(tr("respawnpoints.cmd.unknown_or_not_bound", id));

@@ -121,6 +121,12 @@ public class SpawnRegistry extends net.minecraft.world.level.saveddata.SavedData
         return byPos.get(pos);
     }
 
+    /** True when the player is already bound at this exact position (no re-bind needed). */
+    public boolean isBound(ResourceKey<Level> dim, BlockPos pos, UUID player) {
+        SpawnPointRecord record = byPos.get(GlobalPos.of(dim, pos.immutable()));
+        return record != null && record.boundPlayers().contains(player);
+    }
+
     public List<SpawnPointRecord> allForPlayer(UUID player) {
         List<SpawnPointRecord> result = new ArrayList<>();
         for (SpawnPointRecord record : byPos.values()) {

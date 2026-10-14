@@ -37,7 +37,6 @@
     "suggests": {
         "xaerominimap": "*",
         "xaeroworldmap": "*",
-        "journeymap": "*",
         "yet_another_config_lib_v3": "*",
         "modmenu": "*"
     }

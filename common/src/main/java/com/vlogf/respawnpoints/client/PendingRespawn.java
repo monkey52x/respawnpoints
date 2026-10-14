@@ -26,10 +26,6 @@ public final class PendingRespawn {
         emptyOffer = list.isEmpty();
     }
 
-    public static synchronized void set(List<RespawnEntry> list) {
-        set(list, 0L);
-    }
-
     /** Live marker sync while alive: refresh the list without arming the death flow. */
     public static synchronized void updateLive(List<RespawnEntry> list) {
         entries = List.copyOf(list);
@@ -50,10 +46,6 @@ public final class PendingRespawn {
 
     public static synchronized boolean hasPending() {
         return hasPending && !entries.isEmpty();
-    }
-
-    public static synchronized boolean hasEntries() {
-        return !entries.isEmpty();
     }
 
     /**

@@ -11,3 +11,5 @@ out/
 local.properties
 .vscode/
 hs_err_pid*
+# Personal roadmap: local ideas file, not for the repo.
+ROADMAP.md

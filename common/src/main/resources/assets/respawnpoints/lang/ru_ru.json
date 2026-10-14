@@ -9,7 +9,6 @@
   "respawnpoints.screen.select_point": "Выбери точку",
   "respawnpoints.screen.loading": "Загрузка карты...",
   "respawnpoints.screen.hidden_spot": "Точное место скрыто",
-  "respawnpoints.screen.no_points": "Точек возрождения нет — обычное возрождение",
   "respawnpoints.entry.spawn": "Спавн",
   "respawnpoints.entry.neardeath": "Случайно (рядом)",
   "respawnpoints.entry.type_bed": "Кровать",

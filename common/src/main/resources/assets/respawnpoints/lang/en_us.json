@@ -9,7 +9,6 @@
   "respawnpoints.screen.select_point": "Select a point",
   "respawnpoints.screen.loading": "Loading Map...",
   "respawnpoints.screen.hidden_spot": "Exact spot is hidden",
-  "respawnpoints.screen.no_points": "No respawn points available — respawning at world spawn",
   "respawnpoints.entry.spawn": "World Spawn",
   "respawnpoints.entry.neardeath": "Near death (random)",
   "respawnpoints.entry.type_bed": "Bed",

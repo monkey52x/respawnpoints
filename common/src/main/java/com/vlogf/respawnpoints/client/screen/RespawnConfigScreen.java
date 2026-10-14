@@ -85,7 +85,7 @@ public final class RespawnConfigScreen {
                         .name(Component.translatable("respawnpoints.config.show_name"))
                         .description(OptionDescription.of(Component.translatable(
                                 "respawnpoints.config.show_name_desc")))
-                        .binding(true,
+                        .binding(false,
                                 RespawnClientConfig::showSelectedName,
                                 RespawnClientConfig::setShowSelectedName)
                         .controller(TickBoxControllerBuilder::create)
