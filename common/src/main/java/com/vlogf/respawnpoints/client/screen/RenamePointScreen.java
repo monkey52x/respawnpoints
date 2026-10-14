@@ -2,6 +2,7 @@ package com.vlogf.respawnpoints.client.screen;
 
 import com.vlogf.respawnpoints.model.RespawnEntry;
 import com.vlogf.respawnpoints.network.DeletePointPacket;
+import com.vlogf.respawnpoints.network.RecolorPointPacket;
 import com.vlogf.respawnpoints.network.RenamePointPacket;
 import com.vlogf.respawnpoints.platform.Services;
 import net.minecraft.client.Minecraft;
@@ -58,6 +59,15 @@ public class RenamePointScreen extends Screen {
         if (!name.isEmpty()) {
             Services.NETWORK.sendToServer(new RenamePointPacket(entry.id(), name));
         }
+        // Push a map-side recolor (if any) deterministically: without this,
+        // edits only surface on the next waypoint sync, which may never come
+        // before a relog (bind/death/reload lottery).
+        com.vlogf.respawnpoints.integration.MapIntegrations.currentMapRgb(entry.id(), entry.dimension())
+                .ifPresent(rgb -> {
+                    if ((rgb & 0xFFFFFF) != (entry.color() & 0xFFFFFF)) {
+                        Services.NETWORK.sendToServer(new RecolorPointPacket(entry.id(), rgb));
+                    }
+                });
         back();
     }
 

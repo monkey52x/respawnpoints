@@ -112,6 +112,33 @@ public final class XaeroWaypointSync {
     }
 
     /**
+     * Current map-side color of one entry, for explicit pushes (e.g. the
+     * rename screen Save button). Reads the live marker first, the last seen
+     * baseline second. Null when the marker is not on the map.
+     */
+    public static Integer mapRgbFor(String dim, String id) {
+        try {
+            int rgb = -1;
+            ThirdPartyWaypoints thirdParty = thirdPartyForDimension(dim);
+            if (thirdParty != null) {
+                var wp = thirdParty.get(id);
+                if (wp != null) {
+                    rgb = paletteRgb(wp.getWaypointColor(), -1);
+                }
+            }
+            if (rgb < 0) {
+                WaypointColor last = LAST_COLOR.get(key(dim, id));
+                if (last != null) {
+                    rgb = paletteRgb(last, -1);
+                }
+            }
+            return rgb < 0 ? null : rgb;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
      * Diff our third-party collection of one dimension against the offer.
      * Identity is by stable entry id — no coordinate adoption heuristics.
      */

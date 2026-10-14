@@ -7,6 +7,7 @@ import com.vlogf.respawnpoints.model.RespawnEntry;
 import com.vlogf.respawnpoints.platform.Services;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Optional map integrations. Implementation classes reference third-party APIs
@@ -50,8 +51,26 @@ public final class MapIntegrations {
         }
     }
 
-    /** Reflective Xaero session check (common code must not import xaero APIs). */
-    public static boolean isXaeroSessionReady() {
+    /**
+     * Current map-side waypoint color for one entry, if the map shows it.
+     * Used for explicit pushes (rename screen Save): map edits are otherwise
+     * only noticed on the next waypoint sync, which may come much later.
+     */
+    public static Optional<Integer> currentMapRgb(String entryId, String dimension) {
+        if (!Services.PLATFORM.isModLoaded("xaerominimap")) {
+            return Optional.empty();
+        }
+        try {
+            Class<?> sync = Class.forName(XAERO_SYNC);
+            Object rgb = sync.getMethod("mapRgbFor", String.class, String.class)
+                    .invoke(null, dimension, entryId);
+            return Optional.ofNullable((Integer) rgb);
+        } catch (ReflectiveOperationException | LinkageError | ClassCastException e) {
+            return Optional.empty();
+        }
+    }
+
+    /** Reflective Xaero session check (common code must not import xaero APIs). */    public static boolean isXaeroSessionReady() {
         try {
             Class<?> sessionClass = Class.forName("xaero.common.XaeroMinimapSession");
             Object session = sessionClass.getDeclaredMethod("getCurrentSession").invoke(null);
