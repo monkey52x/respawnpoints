@@ -103,5 +103,7 @@
   "respawnpoints.config.show_spawn": "Показывать спавн",
   "respawnpoints.config.show_spawn_desc": "Предлагать точку мирового спавна.",
   "respawnpoints.config.show_neardeath": "Показывать случайную",
+  "respawnpoints.config.enable_neardeath": "Включить случайную",
+  "respawnpoints.config.enable_neardeath_desc": "Мастер-выключатель: выкл пропускает всю логику случайной точки.",
   "respawnpoints.config.show_neardeath_desc": "Предлагать случайную точку у места смерти."
 }

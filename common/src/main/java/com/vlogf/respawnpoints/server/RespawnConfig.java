@@ -30,6 +30,8 @@ public final class RespawnConfig {
     private static volatile int nearDeathCooldownSec = 300;
     /** Show the world-spawn entry. */
     private static volatile boolean showSpawn = true;
+    /** Master switch for the random near-death system (off skips all its logic). */
+    private static volatile boolean enableNearDeath = false;
     /** Show the random near-death entry (off by default until the system rework). */
     private static volatile boolean showNearDeath = false;
 
@@ -54,6 +56,10 @@ public final class RespawnConfig {
 
     public static boolean isShowSpawn() {
         return showSpawn;
+    }
+
+    public static boolean isEnableNearDeath() {
+        return enableNearDeath;
     }
 
     public static boolean isShowNearDeath() {
@@ -87,6 +93,10 @@ public final class RespawnConfig {
         showSpawn = value;
     }
 
+    public static synchronized void setEnableNearDeath(boolean value) {
+        enableNearDeath = value;
+    }
+
     public static synchronized void setShowNearDeath(boolean value) {
         showNearDeath = value;
     }
@@ -109,9 +119,10 @@ public final class RespawnConfig {
                         nearDeathMinDistance = nearDeathRadius;
                     }
                     showSpawn = clampBool(json, "showSpawn", showSpawn);
+                    enableNearDeath = clampBool(json, "enableNearDeath", enableNearDeath);
                     showNearDeath = clampBool(json, "showNearDeath", showNearDeath);
-                    Constants.LOG.info("RespawnPoints config loaded: bedLimit={} nearDeathRadius={} nearDeathMinDistance={} nearDeathCooldownSec={} showSpawn={} showNearDeath={}",
-                            bedLimit, nearDeathRadius, nearDeathMinDistance, nearDeathCooldownSec, showSpawn, showNearDeath);
+                    Constants.LOG.info("RespawnPoints config loaded: bedLimit={} nearDeathRadius={} nearDeathMinDistance={} nearDeathCooldownSec={} showSpawn={} enableNearDeath={} showNearDeath={}",
+                            bedLimit, nearDeathRadius, nearDeathMinDistance, nearDeathCooldownSec, showSpawn, enableNearDeath, showNearDeath);
                     // Backfill newly added keys into old files.
                     save(gameDir);
                     return;
@@ -131,6 +142,7 @@ public final class RespawnConfig {
         json.addProperty("nearDeathMinDistance", nearDeathMinDistance);
         json.addProperty("nearDeathCooldownSec", nearDeathCooldownSec);
         json.addProperty("showSpawn", showSpawn);
+        json.addProperty("enableNearDeath", enableNearDeath);
         json.addProperty("showNearDeath", showNearDeath);
         try {
             java.io.File file = gameDir.resolve("config").resolve(FILE_NAME).toFile();

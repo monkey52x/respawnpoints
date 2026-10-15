@@ -156,6 +156,15 @@ public final class RespawnConfigScreen {
                         .controller(TickBoxControllerBuilder::create)
                         .build())
                 .option(Option.<Boolean>createBuilder()
+                        .name(Component.translatable("respawnpoints.config.enable_neardeath"))
+                        .description(OptionDescription.of(Component.translatable(
+                                "respawnpoints.config.enable_neardeath_desc")))
+                        .binding(false,
+                                RespawnConfig::isEnableNearDeath,
+                                RespawnConfig::setEnableNearDeath)
+                        .controller(TickBoxControllerBuilder::create)
+                        .build())
+                .option(Option.<Boolean>createBuilder()
                         .name(Component.translatable("respawnpoints.config.show_neardeath"))
                         .description(OptionDescription.of(Component.translatable(
                                 "respawnpoints.config.show_neardeath_desc")))

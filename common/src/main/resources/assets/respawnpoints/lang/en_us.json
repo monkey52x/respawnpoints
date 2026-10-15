@@ -103,5 +103,7 @@
   "respawnpoints.config.show_spawn": "Show spawn",
   "respawnpoints.config.show_spawn_desc": "Offer the world spawn point.",
   "respawnpoints.config.show_neardeath": "Show near-death",
+  "respawnpoints.config.enable_neardeath": "Enable near-death",
+  "respawnpoints.config.enable_neardeath_desc": "Master switch: off skips all near-death logic.",
   "respawnpoints.config.show_neardeath_desc": "Offer a random spot near the place of death."
 }

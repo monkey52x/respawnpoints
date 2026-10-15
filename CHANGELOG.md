@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.6 — Near-death gate fix + master switch
+
+- Fixed `ChunkGate` never accepting disk chunks (the Status visitor halted at
+  the root, so only loaded chunks passed): the visitor now descends with
+  CONTINUE, captures the Status field and halts; non-full stages log at debug.
+- New `enableNearDeath` master switch (default off): disabled skips all
+  near-death logic including the feasibility probes; `showNearDeath` stays as
+  the visibility flag. Server-enforced in validation too.
+- Death offers log their composition at debug
+  (`entries count + near-death ok/cooldown/banned/off/hidden`).
+
 ## 1.0.5 — Cooldown protocol cleanup
 
 - Near-death cooldown moved off `charges` onto its own `RespawnEntry.cooldownSec`

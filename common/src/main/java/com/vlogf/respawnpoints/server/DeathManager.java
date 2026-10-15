@@ -500,19 +500,28 @@ public final class DeathManager {
         var server = player.server;
 
         // Order: near-death first, spawn last. Both screens follow packet order.
-        // The random entry is offered only when a loaded-or-explored column
-        // exists in the band (otherwise it would be an empty promise).
+        // The random entry is offered only when the system is enabled, shown,
+        // and a saved-FULL column exists in the band (otherwise it would be
+        // an empty promise). Disabled skips the feasibility probes entirely.
         BlockPos deathPos = player.blockPosition();
-        if (RespawnConfig.isShowNearDeath() && NearDeathSearch.isFeasible(player)) {
-            // Cooldown has its own field: > 0 seconds left = gray and
-            // unselectable, 0 = ready, -1 = none. Charges stay honest (-1).
-            long remainingMs = PlayerRespawnData.nearDeathCooldownRemainingMs(player);
-            int cooldownSec = remainingMs > 0
-                    ? (int) Math.min(Integer.MAX_VALUE, (remainingMs + 999) / 1000)
-                    : 0;
-            entries.add(new RespawnEntry("neardeath", RespawnPointsType.NEAR_DEATH,
-                    "Near death (random)", "?", 0xAAAAAA,
-                    player.level().dimension().location().toString(), deathPos, true, -1, cooldownSec));
+        String nearDeathState = "off";
+        if (RespawnConfig.isEnableNearDeath()) {
+            if (!RespawnConfig.isShowNearDeath()) {
+                nearDeathState = "hidden";
+            } else if (!NearDeathSearch.isFeasible(player)) {
+                nearDeathState = "banned (nothing saved in band)";
+            } else {
+                // Cooldown has its own field: > 0 seconds left = gray and
+                // unselectable, 0 = ready, -1 = none. Charges stay honest (-1).
+                long remainingMs = PlayerRespawnData.nearDeathCooldownRemainingMs(player);
+                int cooldownSec = remainingMs > 0
+                        ? (int) Math.min(Integer.MAX_VALUE, (remainingMs + 999) / 1000)
+                        : 0;
+                entries.add(new RespawnEntry("neardeath", RespawnPointsType.NEAR_DEATH,
+                        "Near death (random)", "?", 0xAAAAAA,
+                        player.level().dimension().location().toString(), deathPos, true, -1, cooldownSec));
+                nearDeathState = remainingMs > 0 ? "cooldown" : "ok";
+            }
         }
 
         for (PlayerRespawnData.PointSnapshot snapshot : PlayerRespawnData.points(player)) {
@@ -570,6 +579,8 @@ public final class DeathManager {
                     0xFFFF00, Level.OVERWORLD.location().toString(), spawn, false, -1, -1));
         }
 
+        Constants.LOG.debug("Death offer for {}: {} entries, near-death {}",
+                player.getScoreboardName(), entries.size(), nearDeathState);
         return entries;
     }
 

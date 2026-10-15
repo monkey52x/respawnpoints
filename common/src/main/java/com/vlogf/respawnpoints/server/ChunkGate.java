@@ -60,22 +60,35 @@ public final class ChunkGate {
         } catch (Exception e) {
             return false;
         }
+        if (probe.seenRoot && !probe.full) {
+            // Non-full (or unexpected) stage: visible at debug so a Status
+            // string drift never fails silently again.
+            com.vlogf.respawnpoints.Constants.LOG.debug(
+                    "ChunkGate: chunk [{}, {}] stage '{}', need '{}'",
+                    chunkX, chunkZ, probe.foundStatus, FULL_STATUS);
+        }
         return probe.full;
     }
 
     /**
      * Records whether the chunk root was visited and whether its Status field
-     * is FULL. Halts the stream as soon as the answer is known, so almost
-     * nothing is parsed. Absent chunks never call the visitor at all.
+     * is FULL. Halts the stream as soon as the Status value is read (it sits
+     * near the start of chunk NBT, so almost nothing is parsed). Absent chunks
+     * never call the visitor at all.
      */
     private static final class StatusProbe implements StreamTagVisitor {
+        boolean seenRoot;
         boolean full;
+        String foundStatus = "";
         private boolean awaitingStatus;
 
         @Override
         public ValueResult visitRootEntry(TagType<?> type) {
-            // Root must be a compound; anything else (or nothing) means "no".
-            return ValueResult.HALT;
+            seenRoot = true;
+            // Descend: the Status field lives inside the root compound.
+            // (Returning HALT here would stop everything and Status would
+            // never be read — a past bug that rejected every disk chunk.)
+            return ValueResult.CONTINUE;
         }
 
         @Override
@@ -90,6 +103,7 @@ public final class ChunkGate {
         public ValueResult visit(String entry) {
             if (awaitingStatus) {
                 awaitingStatus = false;
+                foundStatus = entry;
                 full = FULL_STATUS.equals(entry);
                 return ValueResult.HALT;
             }
@@ -148,21 +162,25 @@ public final class ChunkGate {
 
         @Override
         public ValueResult visitList(TagType<?> type, int size) {
+            awaitingStatus = false;
             return ValueResult.CONTINUE;
         }
 
         @Override
         public EntryResult visitEntry(TagType<?> type) {
+            awaitingStatus = false;
             return EntryResult.ENTER;
         }
 
         @Override
         public EntryResult visitElement(TagType<?> type, int size) {
+            awaitingStatus = false;
             return EntryResult.ENTER;
         }
 
         @Override
         public ValueResult visitContainerEnd() {
+            awaitingStatus = false;
             return ValueResult.CONTINUE;
         }
     }
