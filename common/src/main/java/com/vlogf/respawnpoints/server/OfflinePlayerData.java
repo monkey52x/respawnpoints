@@ -94,13 +94,70 @@ public final class OfflinePlayerData {
         return server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + ".dat");
     }
 
-    /** Offline-mode (cracked) servers derive UUIDs from the name — fallback when the cache misses. */
-    public static UUID offlineModeUuid(String name) {
-        return UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
+    /** One vanilla usercache.json entry that is still valid. */
+    public record KnownPlayer(UUID uuid, String name) {
     }
 
-    public static boolean hasDataFile(MinecraftServer server, UUID uuid) {
-        return Files.isRegularFile(playerFile(server, uuid));
+    /**
+     * Nick directory from vanilla's own <code>usercache.json</code> (server dir,
+     * game-dir fallback), keyed by lower-cased nick. Expired or unparseable
+     * entries are skipped like vanilla skips them — never resolved, never
+     * suggested by name (raw UUID still works). Read-only: we never write it.
+     */
+    public static java.util.Map<String, KnownPlayer> readUsernameCache(MinecraftServer server) {
+        java.util.Map<String, KnownPlayer> out = new java.util.LinkedHashMap<>();
+        Path file = server.getServerDirectory().resolve("usercache.json");
+        if (!Files.isRegularFile(file)) {
+            file = java.nio.file.Paths.get(System.getProperty("user.dir"), "usercache.json");
+            if (!Files.isRegularFile(file)) {
+                return out;
+            }
+        }
+        long now = System.currentTimeMillis();
+        try {
+            String json = Files.readString(file, StandardCharsets.UTF_8);
+            com.google.gson.JsonArray array =
+                    new com.google.gson.Gson().fromJson(json, com.google.gson.JsonArray.class);
+            if (array == null) {
+                return out;
+            }
+            java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter
+                    .ofPattern("yyyy-MM-dd HH:mm:ss Z", java.util.Locale.ROOT);
+            for (com.google.gson.JsonElement el : array) {
+                if (!el.isJsonObject()) {
+                    continue;
+                }
+                com.google.gson.JsonObject e = el.getAsJsonObject();
+                if (!e.has("name") || !e.has("uuid")) {
+                    continue;
+                }
+                String name = e.get("name").getAsString();
+                UUID uuid;
+                try {
+                    uuid = UUID.fromString(e.get("uuid").getAsString());
+                } catch (IllegalArgumentException ignored) {
+                    continue;
+                }
+                long expiresAt = Long.MIN_VALUE;
+                if (e.has("expiresOn")) {
+                    try {
+                        expiresAt = java.time.OffsetDateTime.parse(
+                                e.get("expiresOn").getAsString(), fmt).toInstant().toEpochMilli();
+                    } catch (Exception ignored) {
+                        continue;
+                    }
+                }
+                if (expiresAt <= now) {
+                    continue;
+                }
+                String key = name.toLowerCase(java.util.Locale.ROOT);
+                // First valid entry wins; vanilla keeps nicks unique anyway.
+                out.putIfAbsent(key, new KnownPlayer(uuid, name));
+            }
+        } catch (Exception e) {
+            Constants.LOG.debug("Could not read usernamecache.json", e);
+        }
+        return out;
     }
 
     /** Snapshots from an offline player's file (custom names included). Empty when none. */

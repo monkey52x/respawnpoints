@@ -66,10 +66,9 @@ public final class RespawnCommands {
         admin.then(Commands.literal("list").executes(ctx -> adminList(ctx.getSource())));
         admin.then(Commands.literal("reload").executes(ctx -> adminReload(ctx.getSource())));
         admin.then(Commands.literal("beds")
-                .then(Commands.argument("player", StringArgumentType.string())
-                        .suggests(playerNameSuggestions())
+                .then(Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
                         .executes(ctx -> adminBeds(ctx.getSource(),
-                                StringArgumentType.getString(ctx, "player"))))
+                                net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player"))))
                 .then(Commands.literal("offline")
                         .then(Commands.argument("player", StringArgumentType.string())
                                 .suggests(offlinePlayerNameSuggestions())
@@ -93,11 +92,10 @@ public final class RespawnCommands {
         admin.then(Commands.literal("unbind")
                 .then(Commands.argument("id", StringArgumentType.string())
                         .suggests(allBedIdSuggestions())
-                        .then(Commands.argument("player", StringArgumentType.string())
-                                .suggests(playerNameSuggestions())
+                        .then(Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
                                 .executes(ctx -> adminUnbind(ctx.getSource(),
                                         StringArgumentType.getString(ctx, "id"),
-                                        StringArgumentType.getString(ctx, "player"))))
+                                        net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player"))))
                         .then(Commands.literal("offline")
                                 .then(Commands.argument("player", StringArgumentType.string())
                                         .suggests(offlinePlayerNameSuggestions())
@@ -107,11 +105,10 @@ public final class RespawnCommands {
         admin.then(Commands.literal("bind")
                 .then(Commands.argument("id", StringArgumentType.string())
                         .suggests(allBedIdSuggestions())
-                        .then(Commands.argument("player", StringArgumentType.string())
-                                .suggests(playerNameSuggestions())
+                        .then(Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
                                 .executes(ctx -> adminBind(ctx.getSource(),
                                         StringArgumentType.getString(ctx, "id"),
-                                        StringArgumentType.getString(ctx, "player"))))
+                                        net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player"))))
                         .then(Commands.literal("offline")
                                 .then(Commands.argument("player", StringArgumentType.string())
                                         .suggests(offlinePlayerNameSuggestions())
@@ -534,13 +531,14 @@ StringArgumentType.getString(ctx, "player")))))));
                         ChatFormatting.RED));
                 lines.add(line);
             } else {
-                // Offline players get the same one-click button: the command
-                // accepts nicks (profile cache) and raw UUIDs, so no typing.
+                // Offline players go through the offline form (plain form is
+                // EntityArgument and rejects anyone offline): same one click.
                 MutableComponent line = Component.literal("- " + playerDisplayName(server, uuid) + " ");
                 line.append(chatButton(
                         tr("respawnpoints.cmd.bedinfo_unbind_hint"),
                         ClickEvent.Action.RUN_COMMAND,
-                        "/respawnpoints admin unbind " + record.id() + " " + rawPlayerName(server, uuid),
+                        "/respawnpoints admin unbind " + record.id() + " offline "
+                                + rawPlayerName(server, uuid),
                         ChatFormatting.RED));
                 lines.add(line);
             }
@@ -598,7 +596,7 @@ StringArgumentType.getString(ctx, "player")))))));
         return uuid.toString() + " (offline)";
     }
 
-    /** Online player names for Tab-complete (offline names are typed by hand). */
+    /** Online player names for Tab-complete of the plain branches. */
     private static SuggestionProvider<CommandSourceStack> playerNameSuggestions() {
         return (ctx, builder) -> {
             var server = ctx.getSource().getServer();
@@ -617,36 +615,56 @@ StringArgumentType.getString(ctx, "player")))))));
     private static SuggestionProvider<CommandSourceStack> offlinePlayerNameSuggestions() {
         return (ctx, builder) -> {
             var server = ctx.getSource().getServer();
-            if (server != null) {
-                java.util.Set<UUID> seen = new java.util.LinkedHashSet<>();
-                for (var record : SpawnRegistry.get(server.overworld()).all()) {
-                    seen.addAll(record.boundPlayers());
+            if (server == null) {
+                return builder.buildFuture();
+            }
+            java.util.Set<UUID> done = new java.util.HashSet<>();
+            int shown = 0;
+            // 1. Vanilla usercache.json names: everyone who joined, unexpired.
+            for (var known : OfflinePlayerData.readUsernameCache(server).values()) {
+                if (shown >= OFFLINE_SUGGEST_CAP) {
+                    break;
                 }
-                try (var files = java.nio.file.Files.list(server.getWorldPath(
-                        net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR))) {
-                    for (Path file : (Iterable<Path>) files::iterator) {
-                        String name = file.getFileName().toString();
-                        if (name.endsWith(".dat") && !name.endsWith(".bak.dat")
-                                && !name.endsWith(".tmp.dat")) {
-                            try {
-                                seen.add(UUID.fromString(name.substring(0, name.length() - 4)));
-                            } catch (IllegalArgumentException ignored) {
-                            }
+                if (!done.add(known.uuid())) {
+                    continue;
+                }
+                if (server.getPlayerList().getPlayer(known.uuid()) != null) {
+                    continue;
+                }
+                builder.suggest(known.name());
+                shown++;
+            }
+            // 2. UUID fallback for bound/file players the cache forgot.
+            java.util.Set<UUID> extra = new java.util.LinkedHashSet<>();
+            for (var record : SpawnRegistry.get(server.overworld()).all()) {
+                extra.addAll(record.boundPlayers());
+            }
+            try (var files = java.nio.file.Files.list(server.getWorldPath(
+                    net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR))) {
+                for (Path file : (Iterable<Path>) files::iterator) {
+                    String name = file.getFileName().toString();
+                    if (name.endsWith(".dat") && !name.endsWith(".bak.dat")
+                            && !name.endsWith(".tmp.dat")) {
+                        try {
+                            extra.add(UUID.fromString(name.substring(0, name.length() - 4)));
+                        } catch (IllegalArgumentException ignored) {
                         }
                     }
-                } catch (Exception ignored) {
                 }
-                int shown = 0;
-                for (UUID uuid : seen) {
-                    if (shown >= OFFLINE_SUGGEST_CAP) {
-                        break;
-                    }
-                    if (server.getPlayerList().getPlayer(uuid) != null) {
-                        continue;
-                    }
-                    builder.suggest(rawPlayerName(server, uuid));
-                    shown++;
+            } catch (Exception ignored) {
+            }
+            for (UUID uuid : extra) {
+                if (shown >= OFFLINE_SUGGEST_CAP) {
+                    break;
                 }
+                if (!done.add(uuid)) {
+                    continue;
+                }
+                if (server.getPlayerList().getPlayer(uuid) != null) {
+                    continue;
+                }
+                builder.suggest(rawPlayerName(server, uuid));
+                shown++;
             }
             return builder.buildFuture();
         };
@@ -664,9 +682,10 @@ StringArgumentType.getString(ctx, "player")))))));
     }
 
     /**
-     * Resolve a typed nick/UUID the same way everywhere: online player first,
-     * then profile cache, then offline-mode derivation with a data-file check,
-     * then a raw UUID fallback.
+     * Resolve a typed nick/UUID the same way everywhere, with zero network:
+     * online player first, then our nickname directory (vanilla usercache.json),
+     * then a raw UUID fallback. Unknown names fail instantly — no Mojang
+     * lookups, so garbage input can never stall the server thread.
      */
     private static PlayerTarget resolvePlayerTarget(CommandSourceStack src, String playerName) {
         var server = src.getServer();
@@ -674,26 +693,16 @@ StringArgumentType.getString(ctx, "player")))))));
         if (online != null) {
             return new PlayerTarget(online, online.getUUID());
         }
-        UUID uuid = null;
-        if (server.getProfileCache() != null) {
-            var profile = server.getProfileCache().get(playerName);
-            if (profile.isPresent()) {
-                uuid = profile.get().getId();
-            }
+        OfflinePlayerData.KnownPlayer known = OfflinePlayerData.readUsernameCache(server)
+                .get(playerName.toLowerCase(java.util.Locale.ROOT));
+        if (known != null) {
+            return new PlayerTarget(null, known.uuid());
         }
-        if (uuid == null) {
-            UUID derived = OfflinePlayerData.offlineModeUuid(playerName);
-            if (OfflinePlayerData.hasDataFile(server, derived)) {
-                uuid = derived;
-            }
+        try {
+            return new PlayerTarget(null, UUID.fromString(playerName));
+        } catch (IllegalArgumentException ignored) {
+            return PlayerTarget.unknown();
         }
-        if (uuid == null) {
-            try {
-                uuid = UUID.fromString(playerName);
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
-        return uuid == null ? PlayerTarget.unknown() : new PlayerTarget(null, uuid);
     }
 
     private static int adminUnbind(CommandSourceStack src, String id, ServerPlayer target) {
