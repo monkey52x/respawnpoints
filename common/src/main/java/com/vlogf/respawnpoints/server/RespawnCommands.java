@@ -432,8 +432,8 @@ StringArgumentType.getString(ctx, "player")))))));
             return adminBeds(src, target.online());
         }
         if (!target.known()) {
-            src.sendSuccess(() -> tr("respawnpoints.cmd.no_beds_of", playerName), false);
-            return 1;
+            src.sendFailure(tr("respawnpoints.cmd.unknown_player", playerName));
+            return 0;
         }
         SpawnRegistry registry = SpawnRegistry.get(server.overworld());
         java.util.List<PlayerRespawnData.PointSnapshot> snapshots = new java.util.ArrayList<>(
@@ -726,7 +726,7 @@ StringArgumentType.getString(ctx, "player")))))));
             return adminUnbind(src, id, target.online());
         }
         if (!target.known()) {
-            src.sendFailure(tr("respawnpoints.cmd.unknown_or_not_bound", id));
+            src.sendFailure(tr("respawnpoints.cmd.unknown_player", playerName));
             return 0;
         }
         // Raced login between resolve and edit: take the live path instead of the file.
@@ -743,7 +743,31 @@ StringArgumentType.getString(ctx, "player")))))));
         return 0;
     }
 
+    /** Bound record for this player, or null (unknown point or not bound). */
+    private static SpawnRegistry.SpawnPointRecord boundRecord(
+            net.minecraft.server.MinecraftServer server, String pointId, UUID uuid) {
+        try {
+            var record = SpawnRegistry.get(server.overworld()).byId(UUID.fromString(pointId));
+            if (record != null && record.boundPlayers().contains(uuid)) {
+                return record;
+            }
+        } catch (IllegalArgumentException ignored) {
+        }
+        return null;
+    }
+
+    private static int alreadyBound(CommandSourceStack src, String display, String id) {
+        src.sendSuccess(() -> tr("respawnpoints.cmd.already_bound", display, id), false);
+        return 1;
+    }
+
     private static int adminBind(CommandSourceStack src, String id, ServerPlayer target) {
+        SpawnRegistry.SpawnPointRecord existing =
+                boundRecord(src.getServer(), id, target.getUUID());
+        if (existing != null) {
+            DeathManager.ensureSnapshot(target, existing);
+            return alreadyBound(src, target.getScoreboardName(), id);
+        }
         if (DeathManager.adminBind(target, id)) {
             src.sendSuccess(() -> tr("respawnpoints.cmd.bound_admin",
                     target.getScoreboardName(), id), true);
@@ -761,12 +785,27 @@ StringArgumentType.getString(ctx, "player")))))));
             return adminBind(src, id, target.online());
         }
         if (!target.known()) {
-            src.sendFailure(tr("respawnpoints.cmd.unknown_point", id));
+            src.sendFailure(tr("respawnpoints.cmd.unknown_player", playerName));
             return 0;
         }
         ServerPlayer raced = server.getPlayerList().getPlayer(target.uuid());
         if (raced != null) {
             return adminBind(src, id, raced);
+        }
+        SpawnRegistry.SpawnPointRecord existing = boundRecord(server, id, target.uuid());
+        if (existing != null) {
+            // Already bound: repair the file snapshot if missing, no push, no spam.
+            boolean has = false;
+            for (var snapshot : OfflinePlayerData.readSnapshots(server, target.uuid())) {
+                if (snapshot.id().equals(existing.id().toString())) {
+                    has = true;
+                    break;
+                }
+            }
+            if (!has) {
+                OfflinePlayerData.upsertSnapshot(server, target.uuid(), existing);
+            }
+            return alreadyBound(src, playerDisplayName(server, target.uuid()), id);
         }
         if (DeathManager.adminBindOffline(server, target.uuid(), id)) {
             final String name = playerDisplayName(server, target.uuid());
