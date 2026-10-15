@@ -59,7 +59,7 @@
   "respawnpoints.cmd.bound_admin": "%1$s привязан к «%2$s»",
   "respawnpoints.cmd.unknown_player": "Неизвестный игрок «%1$s»",
   "respawnpoints.cmd.already_bound": "Уже привязан: %1$s к «%2$s»",
-  "respawnpoints.cmd.config_reloaded": "Конфиг перезагружен: bedLimit=%1$s nearDeathRadius=%2$s nearDeathMinDistance=%3$s showSpawn=%4$s showNearDeath=%5$s",
+  "respawnpoints.cmd.config_reloaded": "Конфиг перезагружен: bedLimit=%1$s enableNearDeath=%2$s nearDeathRadius=%3$s nearDeathMinDistance=%4$s nearDeathCooldownSec=%5$s showSpawn=%6$s showNearDeath=%7$s",
   "respawnpoints.cmd.spawn_hidden": "Мировой спавн скрыт",
   "respawnpoints.cmd.spawn_shown": "Мировой спавн показан",
   "respawnpoints.cmd.spawn_renamed": "Спавн переименован в «%1$s»",

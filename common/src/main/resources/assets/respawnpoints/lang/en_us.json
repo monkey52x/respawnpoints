@@ -59,7 +59,7 @@
   "respawnpoints.cmd.bound_admin": "Bound %1$s to '%2$s'",
   "respawnpoints.cmd.unknown_player": "Unknown player '%1$s'",
   "respawnpoints.cmd.already_bound": "Already bound: %1$s to '%2$s'",
-  "respawnpoints.cmd.config_reloaded": "Config reloaded: bedLimit=%1$s nearDeathRadius=%2$s nearDeathMinDistance=%3$s showSpawn=%4$s showNearDeath=%5$s",
+  "respawnpoints.cmd.config_reloaded": "Config reloaded: bedLimit=%1$s enableNearDeath=%2$s nearDeathRadius=%3$s nearDeathMinDistance=%4$s nearDeathCooldownSec=%5$s showSpawn=%6$s showNearDeath=%7$s",
   "respawnpoints.cmd.spawn_hidden": "World spawn hidden",
   "respawnpoints.cmd.spawn_shown": "World spawn shown",
   "respawnpoints.cmd.spawn_renamed": "Spawn renamed to '%1$s'",

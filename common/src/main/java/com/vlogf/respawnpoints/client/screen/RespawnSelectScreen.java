@@ -34,6 +34,8 @@ public class RespawnSelectScreen extends Screen implements RespawnListUpdater {
     private final RespawnScreenModel.DeleteArm deleteArm = new RespawnScreenModel.DeleteArm();
     /** Death-offer generation this screen was built for (unfreezes on a newer one). */
     private long offerId;
+    /** Last whole second the cooldown labels were repainted (live timer, no server traffic). */
+    private long lastCooldownTickSec = -1;
 
     public RespawnSelectScreen(List<RespawnEntry> entries, Component deathMessage) {
         this(entries, deathMessage, null);
@@ -366,6 +368,16 @@ public class RespawnSelectScreen extends Screen implements RespawnListUpdater {
         if (player != null && player.isAlive()) {
             PendingRespawn.clear();
             Minecraft.getInstance().setScreen(null);
+            return;
+        }
+        // Live cooldown timer: repaint labels once per second. Display only —
+        // the button stays gray until the server push with cooldownSec = 0.
+        if (!sent && ScreenTexts.anyCooldown(entries)) {
+            long sec = System.nanoTime() / 1_000_000_000L;
+            if (sec != lastCooldownTickSec) {
+                lastCooldownTickSec = sec;
+                refreshLayout();
+            }
         }
     }
 

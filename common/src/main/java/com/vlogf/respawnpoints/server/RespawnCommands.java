@@ -922,8 +922,9 @@ StringArgumentType.getString(ctx, "player")))))));
             DeathManager.pushUpdate(online);
         }
         src.sendSuccess(() -> tr("respawnpoints.cmd.config_reloaded",
-                RespawnConfig.getBedLimit(), RespawnConfig.getNearDeathRadius(),
-                RespawnConfig.getNearDeathMinDistance(), RespawnConfig.isShowSpawn(),
+                RespawnConfig.getBedLimit(), RespawnConfig.isEnableNearDeath(),
+                RespawnConfig.getNearDeathRadius(), RespawnConfig.getNearDeathMinDistance(),
+                RespawnConfig.getNearDeathCooldownSec(), RespawnConfig.isShowSpawn(),
                 RespawnConfig.isShowNearDeath()), true);
         return 1;
     }

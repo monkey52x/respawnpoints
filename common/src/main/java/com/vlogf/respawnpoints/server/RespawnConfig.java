@@ -138,11 +138,11 @@ public final class RespawnConfig {
     public static synchronized void save(Path gameDir) {
         JsonObject json = new JsonObject();
         json.addProperty("bedLimit", bedLimit);
+        json.addProperty("enableNearDeath", enableNearDeath);
         json.addProperty("nearDeathRadius", nearDeathRadius);
         json.addProperty("nearDeathMinDistance", nearDeathMinDistance);
         json.addProperty("nearDeathCooldownSec", nearDeathCooldownSec);
         json.addProperty("showSpawn", showSpawn);
-        json.addProperty("enableNearDeath", enableNearDeath);
         json.addProperty("showNearDeath", showNearDeath);
         try {
             java.io.File file = gameDir.resolve("config").resolve(FILE_NAME).toFile();

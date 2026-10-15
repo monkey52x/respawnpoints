@@ -26,6 +26,8 @@ public final class NeoForgeEvents {
     public static void register(IEventBus modBus) {
         NeoForge.EVENT_BUS.addListener((ServerStartingEvent event) ->
                 RespawnConfig.load(event.getServer().getServerDirectory()));
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) ->
+                DeathManager.onServerTick(event.getServer()));
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) ->
                 RespawnCommands.register(event.getDispatcher()));
         NeoForge.EVENT_BUS.addListener((LivingDeathEvent event) -> {

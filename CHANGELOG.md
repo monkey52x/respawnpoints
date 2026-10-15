@@ -10,6 +10,11 @@
   the visibility flag. Server-enforced in validation too.
 - Death offers log their composition at debug
   (`entries count + near-death ok/cooldown/banned/off/hidden`).
+- Config key order fixed (`bedLimit → enableNearDeath → … → showNearDeath`);
+  `admin reload` prints all 7 settings.
+- Cooldown timer ticks live on the client (no traffic, floors at 0:00); the
+  button stays gray until the server push. A 1/sec server tick pushes dead
+  players whose cooldown just expired (no ack protocol — TCP delivery).
 
 ## 1.0.5 — Cooldown protocol cleanup
 

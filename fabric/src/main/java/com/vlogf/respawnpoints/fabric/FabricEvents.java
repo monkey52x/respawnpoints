@@ -25,6 +25,8 @@ public final class FabricEvents {
     public static void register() {
         ServerLifecycleEvents.SERVER_STARTING.register(
                 server -> RespawnConfig.load(server.getServerDirectory()));
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
+                DeathManager::onServerTick);
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity instanceof ServerPlayer player) {
                 DeathManager.onDeath(player);

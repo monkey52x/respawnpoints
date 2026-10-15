@@ -154,6 +154,45 @@ public final class DeathManager {
         ServerHandlers.evict(uuid);
     }
 
+    private static int tickCounter;
+
+    /**
+     * Once per second: flip expired near-death cooldowns. Only dead players
+     * with a pending offer still showing a cooldown are pushed — alive players
+     * have no screen to update, and the push rebuilds the entry at 0 (ready),
+     * so it can never repeat by construction.
+     */
+    public static void onServerTick(net.minecraft.server.MinecraftServer server) {
+        if ((tickCounter++ % 20) != 0) {
+            return;
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (player.isAlive()) {
+                continue;
+            }
+            PendingDeath pending = PENDING.get(player.getUUID());
+            if (pending == null) {
+                continue;
+            }
+            boolean cooling = false;
+            for (RespawnEntry entry : pending.entries()) {
+                if (entry.type() == RespawnPointsType.NEAR_DEATH && entry.cooldownSec() > 0) {
+                    cooling = true;
+                    break;
+                }
+            }
+            if (!cooling || PlayerRespawnData.nearDeathCooldownRemainingMs(player) > 0) {
+                continue;
+            }
+            try {
+                pushUpdate(player);
+            } catch (RuntimeException e) {
+                Constants.LOG.warn("Cooldown expiry push failed for {}",
+                        player.getScoreboardName(), e);
+            }
+        }
+    }
+
     /**
      * Clean snapshots right on login, before the client is ready. No packets
      * are sent (the client can't accept them yet) — this only drops NBT
