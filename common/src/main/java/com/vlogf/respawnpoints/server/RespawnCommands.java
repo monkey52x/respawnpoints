@@ -3,6 +3,7 @@ package com.vlogf.respawnpoints.server;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.vlogf.respawnpoints.util.Slugs;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -186,7 +187,7 @@ StringArgumentType.getString(ctx, "player")))))));
             return 0;
         }
         for (WarpPoint existing : WarpStorage.get(server.overworld()).all()) {
-            if (existing.name().trim().equalsIgnoreCase(clean)) {
+            if (Slugs.equalsTrimmedIgnoreCase(existing.name(), clean)) {
                 src.sendFailure(tr("respawnpoints.cmd.warp_dup", existing.name()));
                 return 0;
             }

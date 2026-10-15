@@ -7,6 +7,7 @@ import com.vlogf.respawnpoints.server.PlayerRespawnData;
 import com.vlogf.respawnpoints.server.RespawnCommands;
 import com.vlogf.respawnpoints.server.RespawnConfig;
 import com.vlogf.respawnpoints.server.ServerIdentity;
+import com.vlogf.respawnpoints.server.ServerInteractionLogic;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -50,65 +51,20 @@ public final class FabricEvents {
         });
         // Shift + empty-hand right-click on a TRACKED bed/anchor is the rename
         // gesture: consume so vanilla does not sleep/set-spawn.
+        // Order and conditions live in ServerInteractionLogic (shared with NeoForge).
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-            // Block/unblock/inspect capture click: armed via bed block|unblock or debug inspect.
-            if (!world.isClientSide() && player instanceof ServerPlayer capturePlayer
-                    && world instanceof net.minecraft.server.level.ServerLevel serverLevel
-                    && (DeathManager.tryCaptureBlockClick(capturePlayer, serverLevel,
-                            hitResult.getBlockPos())
-                            || DeathManager.tryCaptureInspect(capturePlayer, serverLevel,
-                                    hitResult.getBlockPos()))) {
-                capturePlayer.swing(hand, true);
-                return InteractionResult.SUCCESS;
-            }
-            // Plain right-click on a charged anchor is never blocked: the first click
-            // binds in vanilla, repeat clicks are consumed by the mod (action-bar note).
-            // Both hands must be empty so an off-hand glowstone charge is never eaten.
-            if (!world.isClientSide() && player instanceof ServerPlayer serverPlayer
-                    && !player.isShiftKeyDown() && player.getMainHandItem().isEmpty()
-                    && player.getOffhandItem().isEmpty()) {
-                var touched = hitResult.getBlockPos();
-                if (world.getBlockState(touched).getBlock()
-                        instanceof net.minecraft.world.level.block.RespawnAnchorBlock
-                        && DeathManager.onAnchorTouch(serverPlayer, world.dimension(), touched)) {
-                    // Explicit swing: the consumed click has no client-side prediction.
-                    serverPlayer.swing(hand, true);
-                    return InteractionResult.SUCCESS;
-                }
-            }
-            // Anchor charging (anything held, either hand): re-read charges once vanilla
-            // applied the change. Independent of shift - charging is done without it.
-            if (!world.isClientSide() && player instanceof ServerPlayer serverCharger) {
-                var touched = hitResult.getBlockPos();
-                if (world.getBlockState(touched).getBlock()
-                        instanceof net.minecraft.world.level.block.RespawnAnchorBlock
-                        && (!player.getMainHandItem().isEmpty()
-                                || !player.getOffhandItem().isEmpty())) {
-                    var dim = world.dimension();
-                    serverCharger.server.execute(
-                            () -> DeathManager.refreshAnchor(serverCharger, dim, touched));
-                }
-            }
-            if (world.isClientSide() || !(player instanceof ServerPlayer serverPlayer)
-                    || !player.isShiftKeyDown()) {
+            if (world.isClientSide()
+                    || !(player instanceof ServerPlayer serverPlayer)
+                    || !(world instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
                 return InteractionResult.PASS;
             }
-            var pos = hitResult.getBlockPos();
-            var state = world.getBlockState(pos);
-            boolean emptyHand = player.getMainHandItem().isEmpty();
-            if (!emptyHand) {
-                return InteractionResult.PASS;
-            }
-            net.minecraft.core.BlockPos keyPos = pos;
-            if (state.getBlock() instanceof net.minecraft.world.level.block.BedBlock) {
-                keyPos = com.vlogf.respawnpoints.server.SpawnRegistry.headPos(world, pos);
-            } else if (!(state.getBlock() instanceof net.minecraft.world.level.block.RespawnAnchorBlock)) {
-                return InteractionResult.PASS;
-            }
-            var record = com.vlogf.respawnpoints.server.SpawnRegistry
-                    .get(serverPlayer.server.overworld())
-                    .byPos(net.minecraft.core.GlobalPos.of(world.dimension(), keyPos));
-            if (record != null && record.boundPlayers().contains(serverPlayer.getUUID())) {
+            var verdict = ServerInteractionLogic.handleUse(serverPlayer, serverLevel,
+                    hitResult.getBlockPos(), new ServerInteractionLogic.Call(
+                            player.isShiftKeyDown(),
+                            player.getMainHandItem().isEmpty(),
+                            player.getOffhandItem().isEmpty()));
+            if (verdict == ServerInteractionLogic.Verdict.CONSUME) {
+                serverPlayer.swing(hand, true);
                 return InteractionResult.SUCCESS;
             }
             return InteractionResult.PASS;

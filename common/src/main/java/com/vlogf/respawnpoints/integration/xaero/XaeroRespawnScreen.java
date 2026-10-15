@@ -1,8 +1,13 @@
 package com.vlogf.respawnpoints.integration.xaero;
 
 import com.vlogf.respawnpoints.Constants;
+import com.vlogf.respawnpoints.client.EntryNames;
 import com.vlogf.respawnpoints.client.screen.EntriesDiff;
 import com.vlogf.respawnpoints.client.PendingRespawn;
+import com.vlogf.respawnpoints.client.screen.ScreenTexts;
+import com.vlogf.respawnpoints.client.screen.ScreenUtils;
+import com.vlogf.respawnpoints.client.screen.RespawnScreenModel;
+import com.vlogf.respawnpoints.client.screen.UiConstants;
 import com.vlogf.respawnpoints.model.RespawnEntry;
 import com.vlogf.respawnpoints.model.RespawnPointsType;
 import com.vlogf.respawnpoints.network.DeletePointPacket;
@@ -49,9 +54,9 @@ import java.util.Set;
  */
 public class XaeroRespawnScreen extends GuiMap
         implements IDropDownWidgetCallback, com.vlogf.respawnpoints.client.screen.RespawnListUpdater {
-    private static final int SIDEBAR_W = 176;
-    private static final int CARD_H = 44;
-    private static final int LIST_TOP = 36;
+    private static final int SIDEBAR_W = UiConstants.SIDEBAR_W;
+    private static final int CARD_H = UiConstants.CARD_H;
+    private static final int LIST_TOP = UiConstants.LIST_TOP;
 
     private final List<RespawnEntry> sortedEntries = new ArrayList<>();
     private final Component deathMessage;
@@ -99,8 +104,7 @@ public class XaeroRespawnScreen extends GuiMap
         String deathDim = player != null ? player.level().dimension().location().toString() : null;
         this.deathDimContext = deathDim;
         BlockPos deathPos = player != null ? player.blockPosition() : BlockPos.ZERO;
-        sortedEntries.addAll(com.vlogf.respawnpoints.client.RespawnScope.filter(entries, deathDim));
-        sortedEntries.sort((a, b) -> Integer.compare(sortKey(a, deathPos), sortKey(b, deathPos)));
+        sortedEntries.addAll(RespawnScreenModel.sorted(entries, deathDim, deathPos));
         Set<String> dims = new LinkedHashSet<>();
         for (RespawnEntry entry : sortedEntries) {
             dims.add(entry.dimension());
@@ -124,17 +128,7 @@ public class XaeroRespawnScreen extends GuiMap
     }
 
     private static int sortKey(RespawnEntry entry, BlockPos deathPos) {
-        if (entry.concealed() || entry.type() == RespawnPointsType.NEAR_DEATH) {
-            return Integer.MIN_VALUE;
-        }
-        if (entry.type() == RespawnPointsType.SPAWN) {
-            return Integer.MAX_VALUE;
-        }
-        if (!entry.pos().equals(BlockPos.ZERO)) {
-            double d = Math.sqrt(entry.pos().distSqr(deathPos));
-            return (int) Math.min(d, Integer.MAX_VALUE - 1);
-        }
-        return 0;
+        return RespawnScreenModel.sortKey(entry, deathPos);
     }
 
     @Override
@@ -234,9 +228,7 @@ public class XaeroRespawnScreen extends GuiMap
         }
         var player = Minecraft.getInstance().player;
         BlockPos deathPos = player != null ? player.blockPosition() : BlockPos.ZERO;
-        List<RespawnEntry> scoped =
-                new ArrayList<>(com.vlogf.respawnpoints.client.RespawnScope.filter(freshRaw, deathDimContext));
-        scoped.sort((a, b) -> Integer.compare(sortKey(a, deathPos), sortKey(b, deathPos)));
+        List<RespawnEntry> scoped = RespawnScreenModel.sorted(freshRaw, deathDimContext, deathPos);
         if (!EntriesDiff.sameStructure(sortedEntries, scoped)) {
             return false;
         }
@@ -273,9 +265,7 @@ public class XaeroRespawnScreen extends GuiMap
         }
         var player = Minecraft.getInstance().player;
         BlockPos deathPos = player != null ? player.blockPosition() : BlockPos.ZERO;
-        List<RespawnEntry> scoped =
-                new ArrayList<>(com.vlogf.respawnpoints.client.RespawnScope.filter(freshRaw, deathDimContext));
-        scoped.sort((a, b) -> Integer.compare(sortKey(a, deathPos), sortKey(b, deathPos)));
+        List<RespawnEntry> scoped = RespawnScreenModel.sorted(freshRaw, deathDimContext, deathPos);
 
         String keepId = selectedEntryId();
         Set<String> newDims = new LinkedHashSet<>();
@@ -380,7 +370,7 @@ public class XaeroRespawnScreen extends GuiMap
         try {
             Component[] options = new Component[dimOptions.size()];
             for (int i = 0; i < dimOptions.size(); i++) {
-                options[i] = Component.literal(shortDimName(dimOptions.get(i)));
+                options[i] = Component.literal(ScreenUtils.shortDimName(dimOptions.get(i)));
             }
             if (dimDropdown != null) {
                 // Re-add after resize (vanilla clears widgets) and refresh position.
@@ -408,10 +398,6 @@ public class XaeroRespawnScreen extends GuiMap
             dimDropdown = null;
         }
     }
-    private static String shortDimName(String dim) {
-        return com.vlogf.respawnpoints.client.screen.ScreenUtils.shortDimName(dim);
-    }
-
     @Override
     public boolean onSelected(DropDownWidget widget, int id) {
         if (widget == dimDropdown && id >= 0 && id < dimOptions.size()) {
@@ -870,16 +856,16 @@ public class XaeroRespawnScreen extends GuiMap
             if (isSelected) {
                 graphics.fill(itemX, itemY, itemX + 4, itemY + itemH, 0xFFFFFFFF);
             }
-            String nameToDraw = entry.symbol() + " " + displayEntryName(entry);
+            String nameToDraw = entry.symbol() + " " + EntryNames.displayName(entry);
             if (nameToDraw.length() > 22) {
                 nameToDraw = nameToDraw.substring(0, 20) + "...";
             }
-            int nameColor = isDepleted(entry) ? 0x777777 : 0xFFFFFF;
+            int nameColor = ScreenUtils.isDepleted(entry) ? 0x777777 : 0xFFFFFF;
             graphics.drawString(font, nameToDraw, itemX + 10, itemY + 6, nameColor);
-            String subLine = distanceText(entry) + chargesText(entry);
+            String subLine = ScreenUtils.distanceText(entry) + ScreenTexts.plainChargesText(entry);
             graphics.drawString(font, subLine, itemX + 10, itemY + 19,
-                    isDepleted(entry) ? 0xFF5555 : 0x9FC5FF);
-            if (isManageable(entry)) {
+                    ScreenUtils.isDepleted(entry) ? 0xFF5555 : 0x9FC5FF);
+            if (ScreenUtils.isManageable(entry)) {
                 boolean armed = entry.id().equals(armedDeleteId);
                 graphics.drawString(font, armed ? "?" : "✕", itemX + itemW - 16, itemY + 8,
                         armed ? 0xFFFF55 : 0xFF6666);
@@ -902,7 +888,7 @@ public class XaeroRespawnScreen extends GuiMap
         int btnY = height - 30;
         RespawnEntry current = selectedIdx >= 0 && selectedIdx < sortedEntries.size()
                 ? sortedEntries.get(selectedIdx) : null;
-        boolean depleted = current != null && isDepleted(current);
+        boolean depleted = current != null && ScreenUtils.isDepleted(current);
         boolean enabled = current != null && !depleted && !respawning;
         boolean hovered = enabled && mouseX >= btnX && mouseX <= btnX + btnW
                 && mouseY >= btnY && mouseY <= btnY + btnH;
@@ -933,10 +919,6 @@ public class XaeroRespawnScreen extends GuiMap
         int textColor = enabled ? (hovered ? 0xFFFFFF : 0xE0E0E0) : 0xA0A0A0;
         int textW = font.width(text);
         graphics.drawString(font, text, x + (w - textW) / 2, y + (h - 8) / 2, textColor);
-    }
-
-    private static String displayEntryName(RespawnEntry entry) {
-        return com.vlogf.respawnpoints.client.EntryNames.displayName(entry);
     }
 
     private void highlightSelectedWaypoint() {
@@ -978,10 +960,6 @@ public class XaeroRespawnScreen extends GuiMap
         }
     }
 
-    private String distanceText(RespawnEntry entry) {
-        return com.vlogf.respawnpoints.client.screen.ScreenUtils.distanceText(entry);
-    }
-
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (mouseX <= SIDEBAR_W) {
@@ -1007,7 +985,7 @@ public class XaeroRespawnScreen extends GuiMap
                 && mouseX >= btnX && mouseX <= btnX + btnW
                 && mouseY >= btnY && mouseY <= btnY + btnH) {
             RespawnEntry chosen = sortedEntries.get(selectedIdx);
-            if (isDepleted(chosen) || respawning) {
+            if (ScreenUtils.isDepleted(chosen) || respawning) {
                 clickSound();
                 return true;
             }
@@ -1033,7 +1011,7 @@ public class XaeroRespawnScreen extends GuiMap
                             || !(mouseY >= itemY) || !(mouseY <= itemY + itemH)) {
                         continue;
                     }
-                    if (isManageable(entry)
+                    if (ScreenUtils.isManageable(entry)
                             && mouseX >= itemX + itemW - 18 && mouseX <= itemX + itemW - 1) {
                         if (entry.id().equals(armedDeleteId)) {
                             armedDeleteId = null;
@@ -1159,20 +1137,9 @@ public class XaeroRespawnScreen extends GuiMap
         return false;
     }
 
-    private static boolean isManageable(RespawnEntry entry) {
-        return com.vlogf.respawnpoints.client.screen.ScreenUtils.isManageable(entry);
-    }
-
     /** Anchor with no charges left: shown greyed out, respawn blocked (server rejects too). */
-    private static boolean isDepleted(RespawnEntry entry) {
-        return com.vlogf.respawnpoints.client.screen.ScreenUtils.isDepleted(entry);
-    }
-
     private static String chargesText(RespawnEntry entry) {
-        if (entry.type() != RespawnPointsType.ANCHOR || entry.charges() < 0) {
-            return "";
-        }
-        return "  ⚓" + entry.charges();
+        return ScreenTexts.plainChargesText(entry);
     }
 
     @Override

@@ -4,6 +4,7 @@ import com.vlogf.respawnpoints.network.DeletePointPacket;
 import com.vlogf.respawnpoints.network.RecolorPointPacket;
 import com.vlogf.respawnpoints.network.RenamePointPacket;
 import com.vlogf.respawnpoints.network.SelectRespawnPacket;
+import com.vlogf.respawnpoints.util.Limits;
 import net.minecraft.server.level.ServerPlayer;
 
 /** Server-side handling of the client's respawn packets. */
@@ -11,10 +12,6 @@ public final class ServerHandlers {
     private ServerHandlers() {
     }
 
-    /** Min interval between two packets of the same kind from one player (anti-spam). */
-    private static final long RATE_LIMIT_NS = 150_000_000L; // 150ms
-    private static final long READY_LIMIT_NS = 150_000_000L; // 150ms, same as rest: waiting retry must pass
-    private static final int MAX_POINT_ID = 128;
     private static final java.util.Map<java.util.UUID, Long> LAST_SELECT = new java.util.concurrent.ConcurrentHashMap<>();
     // Per-action buckets (not one shared MUTATE map): a single Save click may
     // legitimately send Rename immediately followed by a sync-triggered Recolor,
@@ -53,12 +50,9 @@ public final class ServerHandlers {
     }
 
     public static void onReady(ServerPlayer player) {
-        long now = System.nanoTime();
-        Long prev = LAST_READY.get(player.getUUID());
-        if (prev != null && now - prev < READY_LIMIT_NS) {
+        if (!rateLimit(LAST_READY, player.getUUID())) {
             return;
         }
-        LAST_READY.put(player.getUUID(), now);
         DeathManager.onReady(player);
     }
 
@@ -72,13 +66,13 @@ public final class ServerHandlers {
     }
 
     private static boolean validId(String id) {
-        return id != null && !id.isEmpty() && id.length() <= MAX_POINT_ID;
+        return id != null && !id.isEmpty() && id.length() <= Limits.MAX_POINT_ID;
     }
 
     private static boolean rateLimit(java.util.Map<java.util.UUID, Long> last, java.util.UUID uuid) {
         long now = System.nanoTime();
         Long prev = last.get(uuid);
-        if (prev != null && now - prev < RATE_LIMIT_NS) {
+        if (prev != null && now - prev < Limits.RATE_LIMIT_NS) {
             return false;
         }
         last.put(uuid, now);

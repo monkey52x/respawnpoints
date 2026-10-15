@@ -1,6 +1,7 @@
 package com.vlogf.respawnpoints.client.screen;
 
 import com.vlogf.respawnpoints.client.RespawnClientConfig;
+import com.vlogf.respawnpoints.integration.MapIntegrations;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -20,7 +21,7 @@ public class MapChoiceScreen extends Screen {
         int w = 200;
         int x = (width - w) / 2;
         int y = height / 2 - 30;
-        boolean xaero = RespawnSelectScreen.xaeroPresent();
+        boolean xaero = MapIntegrations.isXaeroPresent();
 
         if (xaero) {
             addRenderableWidget(Button.builder(Component.literal("Xaero's Map"),

@@ -1,7 +1,7 @@
 package com.vlogf.respawnpoints.client;
 
 import com.vlogf.respawnpoints.Constants;
-import com.vlogf.respawnpoints.client.screen.RespawnSelectScreen;
+import com.vlogf.respawnpoints.integration.MapIntegrations;
 
 import java.util.UUID;
 
@@ -27,8 +27,8 @@ public final class MapManagerChoice {
 
     /** Which manager drives markers and the death screen right now. */
     public static RespawnClientConfig.ActiveMap resolve() {
-        boolean xaero = RespawnSelectScreen.xaeroPresent();
-        boolean jm = RespawnSelectScreen.journeyMapPresent();
+        boolean xaero = MapIntegrations.isXaeroPresent();
+        boolean jm = MapIntegrations.isJourneyMapPresent();
         UUID server = currentServer;
         if (server != null) {
             RespawnClientConfig.ActiveMap stored = RespawnClientConfig.choiceFor(server);

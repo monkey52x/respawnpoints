@@ -7,13 +7,14 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 
+import com.vlogf.respawnpoints.util.Slugs;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 /** Server warps, persisted per world. Ids are unique slugs; renames keep the id stable. */
 public class WarpStorage extends SavedData {
     private static final String KEY = "respawnpoints_warps";
+    private static final int NBT_VERSION = 1;
     private final List<WarpPoint> warps = new ArrayList<>();
 
     public static WarpStorage get(ServerLevel level) {
@@ -23,13 +24,22 @@ public class WarpStorage extends SavedData {
 
     private static WarpStorage load(CompoundTag tag, HolderLookup.Provider provider) {
         WarpStorage storage = new WarpStorage();
+        int version = tag.contains("Version") ? tag.getInt("Version") : 0;
         ListTag list = tag.getList("Warps", Tag.TAG_COMPOUND);
+        int before = list.size();
         storage.warps.addAll(WarpPoint.readList(list));
+        int dropped = before - storage.warps.size();
+        if (dropped > 0 || version != NBT_VERSION) {
+            com.vlogf.respawnpoints.Constants.LOG.info(
+                    "Loaded warps v{} (expected v{}): {} entries, dropped {} corrupt",
+                    version, NBT_VERSION, storage.warps.size(), dropped);
+        }
         return storage;
     }
 
     @Override
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
+        tag.putInt("Version", NBT_VERSION);
         tag.put("Warps", WarpPoint.writeList(warps));
         return tag;
     }
@@ -39,10 +49,7 @@ public class WarpStorage extends SavedData {
     }
 
     public WarpPoint add(String name, String symbol, String dimension, net.minecraft.core.BlockPos pos) {
-        String base = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]+", "-");
-        if (base.isEmpty()) {
-            base = "warp";
-        }
+        String base = Slugs.slugify(name);
         String id = base;
         int n = 2;
         while (find(id) != null) {

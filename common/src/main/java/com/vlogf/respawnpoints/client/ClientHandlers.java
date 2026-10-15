@@ -62,13 +62,7 @@ public final class ClientHandlers {
         if (!liveSync && packet.entries().isEmpty()) {
             // Explicit "nothing to choose": drop any waiting state at once so
             // the player falls through to vanilla silently. Nothing to open.
-            ClientReadiness.clearWaiting();
-            var mc = Minecraft.getInstance();
-            // The last point vanished by any path (delete, break, admin):
-            // an open selection would go stale, back to vanilla instead.
-            if (mc.player != null && !mc.player.isAlive()) {
-                RespawnScreenFactory.backToVanilla();
-            }
+            ClientFeedback.fallBackToVanillaSilent();
             return;
         }
         if (!liveSync) {

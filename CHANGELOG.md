@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.2 — Code health (no behavior changes)
+
+- Server click logic unified: Fabric and NeoForge share `ServerInteractionLogic`
+  (capture → anchor-touch → charging refresh → shift-rename); loaders are thin adapters.
+- Selection screens share ordering and delete: `RespawnScreenModel.sorted()`
+  (near-death first, spawn last, rest by distance) and two-step `DeleteArm`;
+  the fallback list now sorts like the Xaero view; charge texts share `ScreenTexts`.
+- Point checks unified in `PointValidator` (bed/anchor/warp predicates, lenient
+  display vs strict select); `DeathManager` delegates, charge refresh reuses it.
+- Small dedups: single rate-limit path in `ServerHandlers`, `Slugs.slugify()`
+  for warp ids, direct `ScreenUtils`/`EntryNames`/`MapIntegrations` calls (no proxies).
+- Shared constants: `Limits` (ids, names, rate-limit) and `UiConstants` (layout).
+- Warp NBT gains `Version` with a corruption log on load; empty-offer fallback
+  is a named `ClientFeedback.fallBackToVanillaSilent()` policy.
+
 ## 1.0.1
 
 - Empty death offer is silent: instant vanilla fallback, no toast, no stuck screen;

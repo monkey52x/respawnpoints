@@ -4,21 +4,19 @@ import com.vlogf.respawnpoints.Constants;
 import com.vlogf.respawnpoints.mixin.ServerPlayerRespawnAccessor;
 import com.vlogf.respawnpoints.model.RespawnEntry;
 import com.vlogf.respawnpoints.model.RespawnPointsType;
+import com.vlogf.respawnpoints.util.Limits;
 import com.vlogf.respawnpoints.network.RespawnListPacket;
 import com.vlogf.respawnpoints.platform.Services;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ServerboundClientCommandPacket;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.RespawnAnchorBlock;
-import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.ArrayList;
@@ -293,7 +291,7 @@ public final class DeathManager {
 
     /** Called from the SelectRespawn packet handler, always on the server thread. */
     public static void onSelect(ServerPlayer player, String pointId) {
-        if (pointId == null || pointId.length() > 128) {
+        if (pointId == null || pointId.length() > Limits.MAX_POINT_ID) {
             return;
         }
         PendingDeath pending = PENDING.get(player.getUUID());
@@ -520,9 +518,8 @@ public final class DeathManager {
                 ServerLevel anchorLevel = server.getLevel(record.pos().dimension());
                 if (anchorLevel != null && anchorLevel.hasChunkAt(record.pos().pos())) {
                     // Refresh stored charges from the live block (no validation here).
-                    var state = anchorLevel.getBlockState(record.pos().pos());
-                    int live = state.getBlock() instanceof RespawnAnchorBlock
-                            ? state.getValue(RespawnAnchorBlock.CHARGE) : charges;
+                    int live = PointValidator.isAnchor(anchorLevel, record.pos().pos())
+                            ? PointValidator.anchorCharges(anchorLevel, record.pos().pos()) : charges;
                     if (live != charges) {
                         SpawnRegistry.get(anchorLevel).setCharges(record.id(), live);
                         charges = live;
@@ -568,27 +565,16 @@ public final class DeathManager {
 
     /** Lenient dimension parse: null on corrupt NBT instead of throwing. */
     private static ResourceKey<Level> tryDimKey(String dim) {
-        if (dim == null || dim.isEmpty()) {
-            return null;
-        }
-        try {
-            ResourceLocation location = ResourceLocation.tryParse(dim);
-            if (location == null) {
-                return null;
-            }
-            return ResourceKey.create(Registries.DIMENSION, location);
-        } catch (Exception e) {
-            return null;
-        }
+        return PointValidator.tryDimKey(dim);
     }
 
     /** Rename one of the player's bound points (name is player-local). */
     public static void onRename(ServerPlayer player, String pointId, String name) {
-        if (pointId == null || pointId.length() > 128 || name == null) {
+        if (pointId == null || pointId.length() > Limits.MAX_POINT_ID || name == null) {
             return;
         }
         String clean = name.trim();
-        if (clean.isEmpty() || clean.length() > 32) {
+        if (clean.isEmpty() || clean.length() > Limits.MAX_NAME) {
             return;
         }
         UUID uuid = parseUuid(pointId);
@@ -608,11 +594,11 @@ public final class DeathManager {
 
     /** Rename one of the player's bound points, skipping the push when unchanged. */
     public static void onRenameIfChanged(ServerPlayer player, String pointId, String name) {
-        if (pointId == null || pointId.length() > 128 || name == null) {
+        if (pointId == null || pointId.length() > Limits.MAX_POINT_ID || name == null) {
             return;
         }
         String clean = name.trim();
-        if (clean.isEmpty() || clean.length() > 32) {
+        if (clean.isEmpty() || clean.length() > Limits.MAX_NAME) {
             return;
         }
         if (clean.equals(PlayerRespawnData.customName(player, pointId))) {
@@ -623,7 +609,7 @@ public final class DeathManager {
 
     /** Reset a bound point's name to the default (clears the custom name). */
     public static void onRenameReset(ServerPlayer player, String pointId) {
-        if (pointId == null || pointId.length() > 128) {
+        if (pointId == null || pointId.length() > Limits.MAX_POINT_ID) {
             return;
         }
         UUID uuid = parseUuid(pointId);
@@ -642,7 +628,7 @@ public final class DeathManager {
 
     /** Recolor one of the player's bound points (color is player-local). */
     public static void onRecolor(ServerPlayer player, String pointId, int color) {
-        if (pointId == null || pointId.length() > 128) {
+        if (pointId == null || pointId.length() > Limits.MAX_POINT_ID) {
             return;
         }
         color &= 0xFFFFFF;
@@ -666,7 +652,7 @@ public final class DeathManager {
      * others stay bound. Spawn/warps cannot be deleted this way.
      */
     public static void onDelete(ServerPlayer player, String pointId) {
-        if (pointId == null || pointId.length() > 128) {
+        if (pointId == null || pointId.length() > Limits.MAX_POINT_ID) {
             return;
         }
         UUID uuid = parseUuid(pointId);
@@ -851,16 +837,7 @@ public final class DeathManager {
 
     /** The record must still exist in the world (loaded chunk) or be assumed live (unloaded). */
     private static boolean isLivePoint(ServerPlayer player, SpawnRegistry.SpawnPointRecord record) {
-        ServerLevel level = player.server.getLevel(record.pos().dimension());
-        if (level == null || !level.hasChunkAt(record.pos().pos())) {
-            return true;
-        }
-        var state = level.getBlockState(record.pos().pos());
-        if (record.isAnchor()) {
-            return state.getBlock() instanceof RespawnAnchorBlock;
-        }
-        return state.getBlock() instanceof BedBlock
-                && state.getValue(BedBlock.PART) == BedPart.HEAD;
+        return PointValidator.isLivePoint(player, record);
     }
 
     /**
@@ -888,43 +865,7 @@ public final class DeathManager {
     }
 
     private static boolean validate(ServerPlayer player, RespawnEntry entry) {
-        return switch (entry.type()) {
-            case SPAWN -> !PlayerRespawnData.isSpawnHidden(player);
-            case BED, ANCHOR -> {
-                UUID uuid = parseUuid(entry.id());
-                SpawnRegistry.SpawnPointRecord record = uuid == null ? null
-                        : SpawnRegistry.get(player.server.overworld()).byId(uuid);
-                if (record == null || !record.boundPlayers().contains(player.getUUID())) {
-                    yield false;
-                }
-                ServerLevel level = player.server.getLevel(record.pos().dimension());
-                if (level == null) {
-                    yield false;
-                }
-                // Unloaded chunk = assumed valid (checked strictly once loaded).
-                if (!level.hasChunkAt(record.pos().pos())) {
-                    yield true;
-                }
-                var state = level.getBlockState(record.pos().pos());
-                if (entry.type() == RespawnPointsType.BED) {
-                    yield state.getBlock() instanceof BedBlock
-                            && state.getValue(BedBlock.PART) == BedPart.HEAD
-                            && !state.getValue(BedBlock.OCCUPIED);
-                }
-                yield state.getBlock() instanceof RespawnAnchorBlock
-                        && state.getValue(RespawnAnchorBlock.CHARGE) > 0;
-            }
-            case WARP -> {
-                String id = entry.id();
-                if (!id.startsWith("warp:") || id.length() <= "warp:".length()) {
-                    yield false;
-                }
-                WarpPoint warp = WarpStorage.get(player.server.overworld()).find(id.substring("warp:".length()));
-                yield warp != null && warp.pos().equals(entry.pos())
-                        && warp.dimension().equals(entry.dimension());
-            }
-            case NEAR_DEATH -> true;
-        };
+        return PointValidator.isSelectable(player, entry);
     }
 
     private static void executeRespawn(ServerPlayer player, RespawnEntry entry, PendingDeath pending) {
