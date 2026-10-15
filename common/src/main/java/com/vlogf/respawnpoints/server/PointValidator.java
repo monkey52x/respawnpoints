@@ -117,7 +117,7 @@ public final class PointValidator {
                 yield warp != null && warp.pos().equals(entry.pos())
                         && warp.dimension().equals(entry.dimension());
             }
-            case NEAR_DEATH -> true;
+            case NEAR_DEATH -> PlayerRespawnData.nearDeathCooldownRemainingMs(player) <= 0;
         };
     }
 

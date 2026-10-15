@@ -862,7 +862,8 @@ public class XaeroRespawnScreen extends GuiMap
             }
             int nameColor = ScreenUtils.isDepleted(entry) ? 0x777777 : 0xFFFFFF;
             graphics.drawString(font, nameToDraw, itemX + 10, itemY + 6, nameColor);
-            String subLine = ScreenUtils.distanceText(entry) + ScreenTexts.plainChargesText(entry);
+            String subLine = ScreenUtils.distanceText(entry) + ScreenTexts.plainChargesText(entry)
+                    + ScreenTexts.cooldownText(entry);
             graphics.drawString(font, subLine, itemX + 10, itemY + 19,
                     ScreenUtils.isDepleted(entry) ? 0xFF5555 : 0x9FC5FF);
             if (ScreenUtils.isManageable(entry)) {
@@ -889,22 +890,30 @@ public class XaeroRespawnScreen extends GuiMap
         RespawnEntry current = selectedIdx >= 0 && selectedIdx < sortedEntries.size()
                 ? sortedEntries.get(selectedIdx) : null;
         boolean depleted = current != null && ScreenUtils.isDepleted(current);
+        boolean onCooldown = current != null && ScreenTexts.isCooldown(current);
+        boolean frozen = respawning && !com.vlogf.respawnpoints.client.RespawnClientConfig.loadingOverlay();
         boolean enabled = current != null && !depleted && !respawning;
         boolean hovered = enabled && mouseX >= btnX && mouseX <= btnX + btnW
                 && mouseY >= btnY && mouseY <= btnY + btnH;
         drawPanelButton(graphics, btnX, btnY, btnW, btnH,
-                depleted ? Component.translatable("respawnpoints.screen.anchor_depleted")
-                        : (enabled ? Component.translatable("respawnpoints.screen.confirm")
-                                : Component.translatable("respawnpoints.screen.select_point")),
-                enabled, hovered);
+                onCooldown ? Component.translatable("respawnpoints.screen.on_cooldown")
+                        : (depleted ? Component.translatable("respawnpoints.screen.anchor_depleted")
+                                : ((enabled || frozen) ? Component.translatable("respawnpoints.screen.confirm")
+                                        : Component.translatable("respawnpoints.screen.select_point"))),
+                enabled, hovered, frozen);
     }
 
     private void drawPanelButton(GuiGraphics graphics, int x, int y, int w, int h,
-                                 Component text, boolean enabled, boolean hovered) {
+                                 Component text, boolean enabled, boolean hovered, boolean frozen) {
         int border = 0xFF000000;
-        int bg = enabled ? (hovered ? 0xFF3E7A34 : 0xFF2F6128) : 0xFF4B4B4B;
-        int highlight = enabled ? 0xFF55A047 : 0xFF4B4B4B;
-        int shadow = enabled ? 0xFF1E4A1A : 0xFF282828;
+        // Frozen (choice sent, waiting on vanilla): dark green, clearly distinct
+        // from both the active green and the disabled gray.
+        int bg = frozen ? 0xFF23402A
+                : (enabled ? (hovered ? 0xFF3E7A34 : 0xFF2F6128) : 0xFF4B4B4B);
+        int highlight = frozen ? 0xFF2E5237
+                : (enabled ? 0xFF55A047 : 0xFF4B4B4B);
+        int shadow = frozen ? 0xFF14261A
+                : (enabled ? 0xFF1E4A1A : 0xFF282828);
         graphics.fill(x + 1, y + 1, x + w - 1, y + h - 1, bg);
         graphics.fill(x, y, x + w, y + 1, border);
         graphics.fill(x, y + h - 1, x + w, y + h, border);
@@ -916,7 +925,7 @@ public class XaeroRespawnScreen extends GuiMap
             graphics.fill(x + w - 2, y + 1, x + w - 1, y + h - 1, shadow);
             graphics.fill(x + 1, y + h - 2, x + w - 1, y + h - 1, shadow);
         }
-        int textColor = enabled ? (hovered ? 0xFFFFFF : 0xE0E0E0) : 0xA0A0A0;
+        int textColor = frozen ? 0xE0E0E0 : (enabled ? (hovered ? 0xFFFFFF : 0xE0E0E0) : 0xA0A0A0);
         int textW = font.width(text);
         graphics.drawString(font, text, x + (w - textW) / 2, y + (h - 8) / 2, textColor);
     }
@@ -962,6 +971,9 @@ public class XaeroRespawnScreen extends GuiMap
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (respawning) {
+            return true;
+        }
         if (mouseX <= SIDEBAR_W) {
             int maxScroll = Math.max(0, sortedEntries.size() * CARD_H - (height - 80));
             scrollAmount = Math.max(0.0, Math.min(maxScroll, scrollAmount - scrollY * 15.0));
@@ -972,6 +984,12 @@ public class XaeroRespawnScreen extends GuiMap
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        // Frozen after Confirm: swallow everything (button, cards, dropdown,
+        // camera) until vanilla takes over or a fresh offer unfreezes.
+        if (respawning) {
+            clickSound();
+            return true;
+        }
         for (GuiEventListener listener : children()) {
             if (listener.mouseClicked(mouseX, mouseY, button)) {
                 return true;
@@ -985,7 +1003,7 @@ public class XaeroRespawnScreen extends GuiMap
                 && mouseX >= btnX && mouseX <= btnX + btnW
                 && mouseY >= btnY && mouseY <= btnY + btnH) {
             RespawnEntry chosen = sortedEntries.get(selectedIdx);
-            if (ScreenUtils.isDepleted(chosen) || respawning) {
+            if (ScreenUtils.isDepleted(chosen)) {
                 clickSound();
                 return true;
             }

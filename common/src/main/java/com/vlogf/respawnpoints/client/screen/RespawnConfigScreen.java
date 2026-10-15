@@ -120,21 +120,31 @@ public final class RespawnConfigScreen {
                         .name(Component.translatable("respawnpoints.config.neardeath_radius"))
                         .description(OptionDescription.of(Component.translatable(
                                 "respawnpoints.config.neardeath_radius_desc")))
-                        .binding(200,
+                        .binding(1024,
                                 RespawnConfig::getNearDeathRadius,
                                 RespawnConfig::setNearDeathRadius)
                         .controller(opt -> IntegerSliderControllerBuilder.create(opt)
-                                .range(16, 1000).step(8))
+                                .range(16, 2048).step(16))
                         .build())
                 .option(Option.<Integer>createBuilder()
                         .name(Component.translatable("respawnpoints.config.neardeath_min"))
                         .description(OptionDescription.of(Component.translatable(
                                 "respawnpoints.config.neardeath_min_desc")))
-                        .binding(16,
+                        .binding(512,
                                 RespawnConfig::getNearDeathMinDistance,
                                 RespawnConfig::setNearDeathMinDistance)
                         .controller(opt -> IntegerSliderControllerBuilder.create(opt)
-                                .range(0, 256).step(4))
+                                .range(0, 1024).step(8))
+                        .build())
+                .option(Option.<Integer>createBuilder()
+                        .name(Component.translatable("respawnpoints.config.neardeath_cooldown"))
+                        .description(OptionDescription.of(Component.translatable(
+                                "respawnpoints.config.neardeath_cooldown_desc")))
+                        .binding(300,
+                                RespawnConfig::getNearDeathCooldownSec,
+                                RespawnConfig::setNearDeathCooldownSec)
+                        .controller(opt -> IntegerSliderControllerBuilder.create(opt)
+                                .range(0, 3600).step(60))
                         .build())
                 .option(Option.<Boolean>createBuilder()
                         .name(Component.translatable("respawnpoints.config.show_spawn"))

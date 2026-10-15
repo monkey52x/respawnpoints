@@ -338,7 +338,7 @@ public class RespawnSelectScreen extends Screen implements RespawnListUpdater {
         String marker = entry == selected ? "◆ " : "◇ ";
         String dist = ScreenUtils.distanceText(entry);
         String charges = ScreenTexts.chargesText(entry);
-        return Component.literal(marker + entry.symbol() + " " + ScreenUtils.displayName(entry) + charges + "  §7" + dist);
+        return Component.literal(marker + entry.symbol() + " " + ScreenUtils.displayName(entry) + charges + ScreenTexts.cooldownText(entry) + "  §7" + dist);
     }
 
     protected void respawn() {

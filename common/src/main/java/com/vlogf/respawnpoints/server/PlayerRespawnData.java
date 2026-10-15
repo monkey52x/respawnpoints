@@ -32,6 +32,7 @@ public final class PlayerRespawnData {
     private static final String SPAWN_HIDDEN = "SpawnHidden";
     private static final String SPAWN_NAME = "SpawnName";
     private static final String BLOCKED = "Blocked";
+    private static final String LAST_NEAR_DEATH_USE = "LastNearDeathUse";
 
     private static final Map<UUID, Data> STORE = new ConcurrentHashMap<>();
 
@@ -58,6 +59,7 @@ public final class PlayerRespawnData {
         final List<BlockedSpot> blocked = new ArrayList<>();
         boolean spawnHidden;
         String spawnName = "";
+        long lastNearDeathUse;
     }
 
     private static Data data(ServerPlayer player) {
@@ -114,6 +116,7 @@ public final class PlayerRespawnData {
         tag.put(POINTS, list);
         tag.putBoolean(SPAWN_HIDDEN, data.spawnHidden);
         tag.putString(SPAWN_NAME, data.spawnName);
+        tag.putLong(LAST_NEAR_DEATH_USE, data.lastNearDeathUse);
         ListTag blocked = new ListTag();
         for (BlockedSpot spot : data.blocked) {
             CompoundTag e = new CompoundTag();
@@ -155,6 +158,8 @@ public final class PlayerRespawnData {
             }
             data.spawnHidden = tag.getBoolean(SPAWN_HIDDEN);
             data.spawnName = tag.contains(SPAWN_NAME, Tag.TAG_STRING) ? tag.getString(SPAWN_NAME) : "";
+            data.lastNearDeathUse = tag.contains(LAST_NEAR_DEATH_USE, Tag.TAG_LONG)
+                    ? tag.getLong(LAST_NEAR_DEATH_USE) : 0L;
             ListTag blocked = tag.getList(BLOCKED, Tag.TAG_COMPOUND);
             for (int i = 0; i < blocked.size(); i++) {
                 CompoundTag e = blocked.getCompound(i);
@@ -229,6 +234,31 @@ public final class PlayerRespawnData {
 
     public static void setSpawnName(ServerPlayer player, String name) {
         data(player).spawnName = name == null ? "" : name;
+    }
+
+    /** Epoch millis of the last successful near-death respawn, 0 = never (no cooldown). */
+    public static long lastNearDeathUse(ServerPlayer player) {
+        return data(player).lastNearDeathUse;
+    }
+
+    public static void setLastNearDeathUse(ServerPlayer player, long epochMillis) {
+        data(player).lastNearDeathUse = epochMillis;
+    }
+
+    /**
+     * Remaining near-death cooldown, millis. Zero means ready: never used,
+     * cooldown disabled, or already elapsed.
+     */
+    public static long nearDeathCooldownRemainingMs(ServerPlayer player) {
+        long last = data(player).lastNearDeathUse;
+        if (last <= 0) {
+            return 0;
+        }
+        long cooldownMs = (long) RespawnConfig.getNearDeathCooldownSec() * 1000L;
+        if (cooldownMs <= 0) {
+            return 0;
+        }
+        return Math.max(0, cooldownMs - (System.currentTimeMillis() - last));
     }
 
     public static List<BlockedSpot> blocked(ServerPlayer player) {

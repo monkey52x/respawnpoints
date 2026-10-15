@@ -17,7 +17,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.RespawnAnchorBlock;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -333,6 +332,9 @@ public final class DeathManager {
             refresh(player);
             return;
         }
+        if (chosen.type() == RespawnPointsType.NEAR_DEATH) {
+            PlayerRespawnData.setLastNearDeathUse(player, System.currentTimeMillis());
+        }
         PENDING.remove(player.getUUID(), pending);
     }
 
@@ -498,11 +500,19 @@ public final class DeathManager {
         var server = player.server;
 
         // Order: near-death first, spawn last. Both screens follow packet order.
+        // The random entry is offered only when a loaded-or-explored column
+        // exists in the band (otherwise it would be an empty promise).
         BlockPos deathPos = player.blockPosition();
-        if (RespawnConfig.isShowNearDeath()) {
+        if (RespawnConfig.isShowNearDeath() && NearDeathSearch.isFeasible(player)) {
+            // Cooldown rides on charges: > 0 seconds left = gray and unselectable,
+            // -1 = ready. Never 0, so the check is unambiguous.
+            long remainingMs = PlayerRespawnData.nearDeathCooldownRemainingMs(player);
+            int charges = remainingMs > 0
+                    ? (int) Math.min(Integer.MAX_VALUE, (remainingMs + 999) / 1000)
+                    : -1;
             entries.add(new RespawnEntry("neardeath", RespawnPointsType.NEAR_DEATH,
                     "Near death (random)", "?", 0xAAAAAA,
-                    player.level().dimension().location().toString(), deathPos, true, -1));
+                    player.level().dimension().location().toString(), deathPos, true, charges));
         }
 
         for (PlayerRespawnData.PointSnapshot snapshot : PlayerRespawnData.points(player)) {
@@ -1009,118 +1019,14 @@ public final class DeathManager {
                 if (level == null) {
                     yield null;
                 }
-                yield new Target(dim, randomNearDeath(player, level, pending.deathPos()));
+                // Null = banned (nothing explored in the band): refresh the
+                // offer instead of dropping the player at the corpse.
+                BlockPos spot = NearDeathSearch.find(player, level, pending.deathPos());
+                if (spot == null) {
+                    yield null;
+                }
+                yield new Target(dim, spot);
             }
         };
-    }
-
-    /**
-     * Random safe spot near the death position. Volumetric search around the death
-     * point first (works in caves and the Nether — no roof teleporting unless the
-     * player died up there), then a heightmap column, then adjusted death pos.
-     * Never leaves the death dimension.
-     */
-    private static BlockPos randomNearDeath(ServerPlayer player, ServerLevel level, BlockPos deathPos) {
-        long t0 = System.nanoTime();
-        int radius = RespawnConfig.getNearDeathRadius();
-        int minDist = RespawnConfig.getNearDeathMinDistance();
-        if (minDist > radius) {
-            minDist = radius;
-        }
-        // Scale attempts with the search band instead of always paying the max:
-        // a 512/256 band no longer burns 64 full-height scans.
-        int band = Math.max(0, radius - minDist);
-        int attempts = Math.min(64, Math.max(16, band / 8));
-        int yHalf = band > 128 ? 8 : 16;
-        // Nether bedrock roof: ceiling layer y=127, walkable top y=128. Whoever died
-        // below the roof must never surface on it, and vice versa. Standing inside
-        // the ceiling layer (dug-out hole) counts as the top side.
-        boolean aboveRoof = level.dimension() == Level.NETHER && deathPos.getY() >= 127;
-        boolean belowRoof = level.dimension() == Level.NETHER && !aboveRoof;
-        for (int i = 0; i < attempts; i++) {
-            double angle = level.random.nextDouble() * Math.PI * 2.0;
-            double dist = minDist + level.random.nextDouble() * Math.max(1, radius - minDist);
-            int x = deathPos.getX() + (int) Math.round(Math.cos(angle) * dist);
-            int z = deathPos.getZ() + (int) Math.round(Math.sin(angle) * dist);
-            if (!level.hasChunkAt(new BlockPos(x, deathPos.getY(), z))) {
-                continue;
-            }
-            int y0 = Math.max(level.getMinBuildHeight() + 1,
-                    Math.min(deathPos.getY() + yHalf, level.getMaxBuildHeight() - 3));
-            int y1 = Math.max(level.getMinBuildHeight() + 1, deathPos.getY() - yHalf);
-            if (belowRoof) {
-                y0 = Math.min(y0, 126);
-            } else if (aboveRoof) {
-                y1 = Math.max(y1, 128);
-            }
-            for (int y = y0; y >= y1; y--) {
-                BlockPos candidate = new BlockPos(x, y, z);
-                if (isSafe(level, candidate)) {
-                    logNearDeath(radius, minDist, t0);
-                    return candidate;
-                }
-            }
-        }
-        int heightAttempts = Math.min(16, attempts / 2);
-        for (int i = 0; i < heightAttempts; i++) {
-            double angle = level.random.nextDouble() * Math.PI * 2.0;
-            double dist = minDist + level.random.nextDouble() * Math.max(1, radius - minDist);
-            int x = deathPos.getX() + (int) Math.round(Math.cos(angle) * dist);
-            int z = deathPos.getZ() + (int) Math.round(Math.sin(angle) * dist);
-            BlockPos column = new BlockPos(x, deathPos.getY(), z);
-            if (!level.hasChunkAt(column)) {
-                continue;
-            }
-            int y = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, new BlockPos(x, 0, z)).getY();
-            if (belowRoof && y >= 127) {
-                continue;
-            }
-            if (aboveRoof && y < 128) {
-                continue;
-            }
-            BlockPos candidate = new BlockPos(x, y, z);
-            if (isSafe(level, candidate)) {
-                logNearDeath(radius, minDist, t0);
-                return candidate;
-            }
-        }
-        BlockPos fallback = player.adjustSpawnLocation(level, deathPos);
-        logNearDeath(radius, minDist, t0);
-        return fallback;
-    }
-
-    private static void logNearDeath(int radius, int minDist, long t0) {
-        long tookMs = (System.nanoTime() - t0) / 1_000_000L;
-        if (tookMs > 200) {
-            Constants.LOG.warn("nearDeath search slow: radius={} min={} tookMs={}", radius, minDist, tookMs);
-        } else {
-            Constants.LOG.debug("nearDeath search: radius={} min={} tookMs={}", radius, minDist, tookMs);
-        }
-    }
-
-    private static boolean isSafe(ServerLevel level, BlockPos pos) {
-        // Unloaded chunks first: never force chunk loads from the death search.
-        if (!level.hasChunkAt(pos) || !level.hasChunkAt(pos.above()) || !level.hasChunkAt(pos.below())) {
-            return false;
-        }
-        if (!level.getFluidState(pos).isEmpty()
-                || !level.getFluidState(pos.above()).isEmpty()
-                || !level.getFluidState(pos.below()).isEmpty()) {
-            return false;
-        }
-        if (!level.getBlockState(pos).isAir() || !level.getBlockState(pos.above()).isAir()) {
-            return false;
-        }
-        var belowState = level.getBlockState(pos.below());
-        if (belowState.isAir() || !belowState.isFaceSturdy(level, pos.below(), net.minecraft.core.Direction.UP)) {
-            return false;
-        }
-        // Nether roof: standing on bedrock below y=128 means inside the ceiling rock.
-        // Only the top surface (y=128+) is a valid roof spawn.
-        if (level.dimension() == Level.NETHER && pos.getY() < 128
-                && belowState.is(net.minecraft.world.level.block.Blocks.BEDROCK)) {
-            return false;
-        }
-        return true;
     }
 }

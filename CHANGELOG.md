@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.0.4 — Near-death rework (explored chunks only)
+
+- Random spot only lands where chunks are loaded now or saved FULL on disk
+  (vanilla `chunkScanner` gate with a Status check, shared region handles,
+  per-search probe cache); new chunks are never generated, so no 3x3 map
+  squares and no drift into the unknown.
+- Three passes: dry-safe (heightmap first, then a small cave scan; lava, fire,
+  cactus, magma, campfires, powder snow banned), dry-risky (walkable danger,
+  lava/fire/water still banned), swim (water surface, no bubble columns).
+  Above the Nether roof spawns straight onto the roof top.
+- Nothing found means banned: the random entry is not offered (cheap
+  feasibility precheck in the death offer), no more corpse fallback.
+- 5-minute cooldown after using the random spot (Rust-style,
+  `nearDeathCooldownSec`, 0 = disabled): the entry stays visible but gray with
+  a live timer snapshot, unselectable on both screens, server-rejected if
+  forged; survives logout via player NBT.
+- Defaults are now 512–1024 (`nearDeathRadius=1024`, `nearDeathMinDistance=512`;
+  clamps 16–2048 / 0–1024, YACL sliders match); sqrt-distributed ring sampling.
+- Attempts and disk loads are bounded (48/32/16 tries, 8 loads max), all
+  memory-first; `>200ms` searches still warn in the log.
+
+## 1.0.3 — Frozen confirm state
+
+- Xaero death screen: after Confirm the bottom-left button turns dark green
+  (frozen) instead of gray and keeps the confirm label; no centered text.
+- While frozen, all sidebar clicks, scroll and the dimension dropdown are
+  swallowed until vanilla takes over (or a fresh server offer unfreezes).
+- Rejected choices still unfreeze via a new server offer (`resetForNewOffer`).
+
 ## 1.0.2 — Code health (no behavior changes)
 
 - Server click logic unified: Fabric and NeoForge share `ServerInteractionLogic`

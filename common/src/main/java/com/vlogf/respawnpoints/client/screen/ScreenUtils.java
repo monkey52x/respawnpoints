@@ -28,7 +28,8 @@ public final class ScreenUtils {
     }
 
     public static boolean isDepleted(RespawnEntry entry) {
-        return entry.type() == RespawnPointsType.ANCHOR && entry.charges() == 0;
+        return entry.type() == RespawnPointsType.ANCHOR && entry.charges() == 0
+                || ScreenTexts.isCooldown(entry);
     }
 
     /** Distance text: concealed -> ???, foreign dim -> dim name, own dim -> meters (3D from player). */

@@ -21,7 +21,7 @@ Pick where you wake up. On death, the vanilla screen becomes a point-selection s
 
 1. Install [NeoForge](https://neoforged.net/) for Minecraft 1.21.1.
 2. Install Xaero's World Map and Xaero's Minimap.
-3. Drop `respawnpoints-neoforge-1.21.1-1.0.2.jar` into the `mods` folder (client **and** server).
+3. Drop `respawnpoints-neoforge-1.21.1-1.0.4.jar` into the `mods` folder (client **and** server).
 4. (Optional) Install YACL to configure the mod in-game.
 
 ## Features

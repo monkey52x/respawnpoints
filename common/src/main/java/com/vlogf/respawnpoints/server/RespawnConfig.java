@@ -22,10 +22,12 @@ public final class RespawnConfig {
 
     /** Max tracked beds+anchors per player. Oldest entry drops when exceeded. */
     private static volatile int bedLimit = 10;
-    /** Max distance for the random NEAR_DEATH spot. */
-    private static volatile int nearDeathRadius = 200;
+    /** Max distance for the random NEAR_DEATH spot (explored chunks only, never generates). */
+    private static volatile int nearDeathRadius = 1024;
     /** Min distance for the random NEAR_DEATH spot (so it is not the exact death pos). */
-    private static volatile int nearDeathMinDistance = 16;
+    private static volatile int nearDeathMinDistance = 512;
+    /** Cooldown after using the near-death spot, seconds (0 = disabled). */
+    private static volatile int nearDeathCooldownSec = 300;
     /** Show the world-spawn entry. */
     private static volatile boolean showSpawn = true;
     /** Show the random near-death entry (off by default until the system rework). */
@@ -46,6 +48,10 @@ public final class RespawnConfig {
         return nearDeathMinDistance;
     }
 
+    public static int getNearDeathCooldownSec() {
+        return nearDeathCooldownSec;
+    }
+
     public static boolean isShowSpawn() {
         return showSpawn;
     }
@@ -60,17 +66,21 @@ public final class RespawnConfig {
     }
 
     public static synchronized void setNearDeathRadius(int value) {
-        nearDeathRadius = Math.min(1000, Math.max(16, value));
+        nearDeathRadius = Math.min(2048, Math.max(16, value));
         if (nearDeathMinDistance > nearDeathRadius) {
             nearDeathMinDistance = nearDeathRadius;
         }
     }
 
     public static synchronized void setNearDeathMinDistance(int value) {
-        nearDeathMinDistance = Math.min(256, Math.max(0, value));
+        nearDeathMinDistance = Math.min(1024, Math.max(0, value));
         if (nearDeathMinDistance > nearDeathRadius) {
             nearDeathMinDistance = nearDeathRadius;
         }
+    }
+
+    public static synchronized void setNearDeathCooldownSec(int value) {
+        nearDeathCooldownSec = Math.min(3600, Math.max(0, value));
     }
 
     public static synchronized void setShowSpawn(boolean value) {
@@ -90,16 +100,18 @@ public final class RespawnConfig {
                 JsonObject json = GSON.fromJson(reader, JsonObject.class);
                 if (json != null) {
                     bedLimit = clampInt(json, "bedLimit", bedLimit, 1, 1024);
-                    nearDeathRadius = clampInt(json, "nearDeathRadius", nearDeathRadius, 16, 1000);
+                    nearDeathRadius = clampInt(json, "nearDeathRadius", nearDeathRadius, 16, 2048);
                     nearDeathMinDistance =
-                            clampInt(json, "nearDeathMinDistance", nearDeathMinDistance, 0, 256);
+                            clampInt(json, "nearDeathMinDistance", nearDeathMinDistance, 0, 1024);
+                    nearDeathCooldownSec =
+                            clampInt(json, "nearDeathCooldownSec", nearDeathCooldownSec, 0, 3600);
                     if (nearDeathMinDistance > nearDeathRadius) {
                         nearDeathMinDistance = nearDeathRadius;
                     }
                     showSpawn = clampBool(json, "showSpawn", showSpawn);
                     showNearDeath = clampBool(json, "showNearDeath", showNearDeath);
-                    Constants.LOG.info("RespawnPoints config loaded: bedLimit={} nearDeathRadius={} nearDeathMinDistance={} showSpawn={} showNearDeath={}",
-                            bedLimit, nearDeathRadius, nearDeathMinDistance, showSpawn, showNearDeath);
+                    Constants.LOG.info("RespawnPoints config loaded: bedLimit={} nearDeathRadius={} nearDeathMinDistance={} nearDeathCooldownSec={} showSpawn={} showNearDeath={}",
+                            bedLimit, nearDeathRadius, nearDeathMinDistance, nearDeathCooldownSec, showSpawn, showNearDeath);
                     // Backfill newly added keys into old files.
                     save(gameDir);
                     return;
@@ -117,6 +129,7 @@ public final class RespawnConfig {
         json.addProperty("bedLimit", bedLimit);
         json.addProperty("nearDeathRadius", nearDeathRadius);
         json.addProperty("nearDeathMinDistance", nearDeathMinDistance);
+        json.addProperty("nearDeathCooldownSec", nearDeathCooldownSec);
         json.addProperty("showSpawn", showSpawn);
         json.addProperty("showNearDeath", showNearDeath);
         try {
