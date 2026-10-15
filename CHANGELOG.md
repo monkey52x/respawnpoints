@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5 — Cooldown protocol cleanup
+
+- Near-death cooldown moved off `charges` onto its own `RespawnEntry.cooldownSec`
+  wire field (-1 = none, 0 = ready, >0 = seconds left); anchor charges untouched.
+- No behavior change vs 1.0.4 besides the cleaner encoding.
+
 ## 1.0.4 — Near-death rework (explored chunks only)
 
 - Random spot only lands where chunks are loaded now or saved FULL on disk

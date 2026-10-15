@@ -23,9 +23,9 @@ public final class ScreenTexts {
         return "  ⚓" + entry.charges();
     }
 
-    /** Near-death on cooldown: charges carry the remaining seconds (> 0). Never 0 by construction. */
+    /** Near-death on cooldown: cooldownSec carries the remaining seconds (> 0). Never 0 while active. */
     public static boolean isCooldown(RespawnEntry entry) {
-        return entry.type() == RespawnPointsType.NEAR_DEATH && entry.charges() > 0;
+        return entry.type() == RespawnPointsType.NEAR_DEATH && entry.cooldownSec() > 0;
     }
 
     /** Cooldown timer snapshot (m:ss) taken when the offer was built. */
@@ -33,7 +33,7 @@ public final class ScreenTexts {
         if (!isCooldown(entry)) {
             return "";
         }
-        int total = entry.charges();
+        int total = entry.cooldownSec();
         return String.format("  §7%d:%02d", total / 60, total % 60);
     }
 }

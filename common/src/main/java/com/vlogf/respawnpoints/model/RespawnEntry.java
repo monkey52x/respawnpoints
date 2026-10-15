@@ -8,6 +8,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
  * For NEAR_DEATH the exact spot is concealed: pos carries the death position
  * (for distance display) and the server picks the real spot on selection.
  * Charges: anchor charge count, -1 when not applicable.
+ * Cooldown seconds: remaining near-death cooldown, -1 when none, 0 when ready.
  */
 public record RespawnEntry(
         String id,
@@ -18,7 +19,8 @@ public record RespawnEntry(
         String dimension,
         BlockPos pos,
         boolean concealed,
-        int charges) {
+        int charges,
+        int cooldownSec) {
 
     public void write(RegistryFriendlyByteBuf buf) {
         buf.writeUtf(id);
@@ -30,6 +32,7 @@ public record RespawnEntry(
         buf.writeBlockPos(pos);
         buf.writeBoolean(concealed);
         buf.writeVarInt(charges);
+        buf.writeVarInt(cooldownSec);
     }
 
     public static RespawnEntry read(RegistryFriendlyByteBuf buf) {
@@ -47,6 +50,7 @@ public record RespawnEntry(
         BlockPos pos = buf.readBlockPos();
         boolean concealed = buf.readBoolean();
         int charges = buf.readVarInt();
-        return new RespawnEntry(id, type, name, symbol, color, dimension, pos, concealed, charges);
+        int cooldownSec = buf.readVarInt();
+        return new RespawnEntry(id, type, name, symbol, color, dimension, pos, concealed, charges, cooldownSec);
     }
 }

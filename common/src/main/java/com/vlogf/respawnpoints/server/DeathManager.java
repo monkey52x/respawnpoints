@@ -504,15 +504,15 @@ public final class DeathManager {
         // exists in the band (otherwise it would be an empty promise).
         BlockPos deathPos = player.blockPosition();
         if (RespawnConfig.isShowNearDeath() && NearDeathSearch.isFeasible(player)) {
-            // Cooldown rides on charges: > 0 seconds left = gray and unselectable,
-            // -1 = ready. Never 0, so the check is unambiguous.
+            // Cooldown has its own field: > 0 seconds left = gray and
+            // unselectable, 0 = ready, -1 = none. Charges stay honest (-1).
             long remainingMs = PlayerRespawnData.nearDeathCooldownRemainingMs(player);
-            int charges = remainingMs > 0
+            int cooldownSec = remainingMs > 0
                     ? (int) Math.min(Integer.MAX_VALUE, (remainingMs + 999) / 1000)
-                    : -1;
+                    : 0;
             entries.add(new RespawnEntry("neardeath", RespawnPointsType.NEAR_DEATH,
                     "Near death (random)", "?", 0xAAAAAA,
-                    player.level().dimension().location().toString(), deathPos, true, charges));
+                    player.level().dimension().location().toString(), deathPos, true, -1, cooldownSec));
         }
 
         for (PlayerRespawnData.PointSnapshot snapshot : PlayerRespawnData.points(player)) {
@@ -541,10 +541,10 @@ public final class DeathManager {
                     }
                 }
                 entries.add(new RespawnEntry(record.id().toString(), RespawnPointsType.ANCHOR,
-                        display, "⚓", snapshot.color(), dimName, snapshot.pos(), false, charges));
+                        display, "⚓", snapshot.color(), dimName, snapshot.pos(), false, charges, -1));
             } else {
                 entries.add(new RespawnEntry(record.id().toString(), RespawnPointsType.BED,
-                        display, "🛏", snapshot.color(), dimName, snapshot.pos(), false, -1));
+                        display, "🛏", snapshot.color(), dimName, snapshot.pos(), false, -1, -1));
             }
         }
 
@@ -556,7 +556,7 @@ public final class DeathManager {
             }
             entries.add(new RespawnEntry("warp:" + warp.id(), RespawnPointsType.WARP,
                     warp.name(), warp.symbol().isEmpty() ? "★" : warp.symbol(),
-                    0xFFFF55, warp.dimension(), warp.pos(), false, -1));
+                    0xFFFF55, warp.dimension(), warp.pos(), false, -1, -1));
         }
 
         if (RespawnConfig.isShowSpawn() && !PlayerRespawnData.isSpawnHidden(player)) {
@@ -567,7 +567,7 @@ public final class DeathManager {
             entries.add(new RespawnEntry("spawn", RespawnPointsType.SPAWN,
                     PlayerRespawnData.spawnName(player),
                     "⌘",
-                    0xFFFF00, Level.OVERWORLD.location().toString(), spawn, false, -1));
+                    0xFFFF00, Level.OVERWORLD.location().toString(), spawn, false, -1, -1));
         }
 
         return entries;
