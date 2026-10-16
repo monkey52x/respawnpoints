@@ -12,6 +12,7 @@
         "sources": ""
     },
     "license": "${license}",
+    "icon": "assets/respawnpoints/icon.png",
     "environment": "*",
     "entrypoints": {
         "main": [

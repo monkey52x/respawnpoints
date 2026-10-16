@@ -129,6 +129,19 @@ processResources {
     inputs.properties(expandProps)
 }
 
+// Single source of truth for the mod icon: root assets/logo.png is copied
+// into the jar on every build, so editing it never needs a manual re-copy.
+processResources {
+    from(rootProject.file('assets/logo.png')) {
+        into 'assets/respawnpoints'
+        rename { 'icon.png' }
+    }
+    // YACL preview images (show_spawn.png, show_neardeath.png, ...).
+    from(rootProject.file('assets/yacl')) {
+        into 'assets/respawnpoints/yacl'
+    }
+}
+
 publishing {
     publications {
         register('mavenJava', MavenPublication) {

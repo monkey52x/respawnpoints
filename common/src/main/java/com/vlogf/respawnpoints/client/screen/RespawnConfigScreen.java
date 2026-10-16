@@ -116,6 +116,15 @@ public final class RespawnConfigScreen {
                         .controller(opt -> IntegerSliderControllerBuilder.create(opt)
                                 .range(1, 1024).step(1))
                         .build())
+                .option(Option.<Boolean>createBuilder()
+                        .name(Component.translatable("respawnpoints.config.enable_neardeath"))
+                        .description(OptionDescription.of(Component.translatable(
+                                "respawnpoints.config.enable_neardeath_desc")))
+                        .binding(false,
+                                RespawnConfig::isEnableNearDeath,
+                                RespawnConfig::setEnableNearDeath)
+                        .controller(TickBoxControllerBuilder::create)
+                        .build())
                 .option(Option.<Integer>createBuilder()
                         .name(Component.translatable("respawnpoints.config.neardeath_radius"))
                         .description(OptionDescription.of(Component.translatable(
@@ -148,26 +157,25 @@ public final class RespawnConfigScreen {
                         .build())
                 .option(Option.<Boolean>createBuilder()
                         .name(Component.translatable("respawnpoints.config.show_spawn"))
-                        .description(OptionDescription.of(Component.translatable(
-                                "respawnpoints.config.show_spawn_desc")))
+                        .description(OptionDescription.createBuilder()
+                                .text(Component.translatable(
+                                        "respawnpoints.config.show_spawn_desc"))
+                                .image(net.minecraft.resources.ResourceLocation
+                                        .fromNamespaceAndPath("respawnpoints", "yacl/show_spawn.png"), 480, 270)
+                                .build())
                         .binding(true,
                                 RespawnConfig::isShowSpawn,
                                 RespawnConfig::setShowSpawn)
                         .controller(TickBoxControllerBuilder::create)
                         .build())
                 .option(Option.<Boolean>createBuilder()
-                        .name(Component.translatable("respawnpoints.config.enable_neardeath"))
-                        .description(OptionDescription.of(Component.translatable(
-                                "respawnpoints.config.enable_neardeath_desc")))
-                        .binding(false,
-                                RespawnConfig::isEnableNearDeath,
-                                RespawnConfig::setEnableNearDeath)
-                        .controller(TickBoxControllerBuilder::create)
-                        .build())
-                .option(Option.<Boolean>createBuilder()
                         .name(Component.translatable("respawnpoints.config.show_neardeath"))
-                        .description(OptionDescription.of(Component.translatable(
-                                "respawnpoints.config.show_neardeath_desc")))
+                        .description(OptionDescription.createBuilder()
+                                .text(Component.translatable(
+                                        "respawnpoints.config.show_neardeath_desc"))
+                                .image(net.minecraft.resources.ResourceLocation
+                                        .fromNamespaceAndPath("respawnpoints", "yacl/show_neardeath.png"), 480, 270)
+                                .build())
                         .binding(false,
                                 RespawnConfig::isShowNearDeath,
                                 RespawnConfig::setShowNearDeath)

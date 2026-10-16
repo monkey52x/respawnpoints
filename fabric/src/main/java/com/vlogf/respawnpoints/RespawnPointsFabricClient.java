@@ -1,8 +1,8 @@
 package com.vlogf.respawnpoints;
 
 import com.vlogf.respawnpoints.client.ClientBedActions;
+import com.vlogf.respawnpoints.client.ClientPreconditions;
 import com.vlogf.respawnpoints.client.ClientReadiness;
-import com.vlogf.respawnpoints.fabric.FabricClientPreconditions;
 import com.vlogf.respawnpoints.fabric.FabricNetworkHelper;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -13,7 +13,7 @@ import net.minecraft.world.InteractionResult;
 public class RespawnPointsFabricClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        FabricClientPreconditions.checkMapsInstalled();
+        ClientPreconditions.checkMapsInstalled();
         FabricNetworkHelper.registerClientReceivers();
         ClientTickEvents.END_CLIENT_TICK.register(client -> ClientReadiness.tick());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
