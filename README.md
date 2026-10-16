@@ -10,18 +10,17 @@ Pick where you wake up. On death, the vanilla screen becomes a point-selection s
 
 ## Requirements
 
-- NeoForge for Minecraft 1.21.1
-- [Xaero's World Map](https://modrinth.com/mod/xaeros-world-map)
-- [Xaero's Minimap](https://modrinth.com/mod/xaeros-minimap)
+- NeoForge 21.1.x **or** Fabric Loader ≥0.16.14 + Fabric API — for Minecraft 1.21.1
+- [Xaero's World Map](https://modrinth.com/mod/xaeros-world-map) and [Xaero's Minimap](https://modrinth.com/mod/xaeros-minimap) (builds matching your loader)
 - Required on both client and server.
 - ❌ Not compatible with [JourneyMap](https://modrinth.com/plugin/journeymap) — the game will refuse to load with it installed.
-- Optional: [YACL](https://modrinth.com/mod/yacl) for the settings screen.
+- Optional: [YACL](https://modrinth.com/mod/yacl) for the settings screen (plus ModMenu on Fabric).
 
 ## Installation
 
-1. Install [NeoForge](https://neoforged.net/) for Minecraft 1.21.1.
+1. Install NeoForge 21.1.x **or** Fabric Loader (+ Fabric API) for Minecraft 1.21.1.
 2. Install Xaero's World Map and Xaero's Minimap.
-3. Drop the mod `.jar` into the `mods` folder (client **and** server).
+3. Drop the mod `.jar` for your loader (NeoForge or Fabric build) into the `mods` folder (client **and** server).
 4. (Optional) Install YACL to configure the mod in-game.
 
 ## Features
