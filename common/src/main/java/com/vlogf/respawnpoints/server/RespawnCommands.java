@@ -351,8 +351,9 @@ StringArgumentType.getString(ctx, "player")))))));
     }
 
     /** Shared `admin player [...] cooldown <id> <op> [seconds]` subtree (online + offline forms). */
-    private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> cooldownSub(
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> cooldownSub(
             boolean offline) {
+        var cooldown = Commands.literal("cooldown");
         var id = Commands.argument("id", StringArgumentType.string())
                 .suggests(cooldownIdSuggestions(offline));
         for (String op : java.util.List.of("get", "reset")) {
@@ -379,7 +380,8 @@ StringArgumentType.getString(ctx, "player")))))));
                                             StringArgumentType.getString(ctx, "id"), operation,
                                             IntegerArgumentType.getInteger(ctx, "seconds")))));
         }
-        return id;
+        cooldown.then(id);
+        return cooldown;
     }
 
     /** Require the player's own bound record, or report unknown_point. Null when rejected. */

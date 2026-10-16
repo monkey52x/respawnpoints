@@ -11,6 +11,8 @@
   Editing a dead player with an open offer refreshes their screen live.
 - Any entry may now carry a cooldown: gray + live timer on both screens,
   server-rejected on select (depleted anchors keep their own text first).
+- Fixed the command path: the missing `cooldown` literal is back, so the form is
+  `admin player <player> cooldown <id> <op> [seconds]` (and the offline branch).
 
 ## 1.0.6 — Near-death gate fix + master switch
 
