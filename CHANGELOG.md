@@ -1,6 +1,9 @@
 # Changelog
 
-## 1.0.7 — Universal per-point cooldowns
+## 1.0.8 — Fabric dependency parity
+
+- Added: Fabric blocks launch with JourneyMap installed (loader incompatibility window).
+- Changed: missing Xaero maps on Fabric open the native Fabric error window naming the missing mod, then exit cleanly with no crash report.
 
 - Added: cooldowns on any point (`neardeath`, `spawn`, `warp:<name>`, beds/anchors) with admin commands `admin player <player> cooldown <id> <get|reset|set|add|remove> [seconds]` and the `offline` branch (warp ids complete quoted; editing the dead refreshes their screen live). Expired cooldowns clean themselves up.
 - Changed: any entry can show a cooldown (gray + live timer); spent anchors still show “depleted” first.
