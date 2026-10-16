@@ -3,6 +3,8 @@
 ## 1.0.8 — Fabric JourneyMap block, settings polish
 
 - Added: Fabric blocks launch with JourneyMap installed (loader incompatibility window).
+- Changed: clearer YACL names for the random-spawn options; the enable switch moved right after the bed limit; the no-YACL button now says Continue.
+- Added: mod icon bundled in the jar (auto-copied from the logo on every build); preview images for the two show-toggles in the settings screen.
 
 ## 1.0.7 — Universal per-point cooldowns
 
