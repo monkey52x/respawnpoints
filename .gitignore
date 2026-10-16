@@ -13,3 +13,5 @@ local.properties
 hs_err_pid*
 # Personal roadmap: local ideas file, not for the repo.
 ROADMAP.md
+# Local changelog draft history, not for the repo.
+CHANGELOG.md.bak

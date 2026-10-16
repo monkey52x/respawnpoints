@@ -21,7 +21,7 @@ Pick where you wake up. On death, the vanilla screen becomes a point-selection s
 
 1. Install [NeoForge](https://neoforged.net/) for Minecraft 1.21.1.
 2. Install Xaero's World Map and Xaero's Minimap.
-3. Drop `respawnpoints-neoforge-1.21.1-1.0.7.jar` into the `mods` folder (client **and** server).
+3. Drop the mod `.jar` into the `mods` folder (client **and** server).
 4. (Optional) Install YACL to configure the mod in-game.
 
 ## Features
@@ -30,7 +30,9 @@ Pick where you wake up. On death, the vanilla screen becomes a point-selection s
 - **Beds & anchors** — bind by sleeping / charging the anchor. Rename with Shift + Right-click, recolor via the map menu (Save pushes the map-side color to the server), per-player names. Blocklist beds you never want bound (`bed block`).
 - **Admin warps** — server-wide points with teleport, visible to everyone.
 - **Offline player management** — `beds`, `bind` and `unbind` accept nicks/UUIDs of offline players, plus `offline` branches with offline-only Tab-complete. No Mojang lookups: unknown names fail instantly without stalling the server.
-- **Near-death random spot** — optional random revive near your death point (off by default).
+- **Near-death random spot** — optional random revive (off by default): only existing chunks, never generates new ones. Lava and void are always banned; in the ocean you spawn swimming. 5-minute cooldown after use; not offered when nothing suitable is in range.
+- **Frozen confirm** — after confirming, the button turns dark green and the screen waits for vanilla to take over.
+- **Per-point cooldowns** — any entry can carry a cooldown (gray + live timer), manageable via admin commands.
 - **Waypoints** — every point syncs to Xaero's map, both ways for colors.
 - **Server-authoritative** — every choice is re-validated on select; broken beds, spent anchors and stale picks fall back cleanly.
 
@@ -64,11 +66,13 @@ Admin:
 - `/respawnpoints admin tp warp <id>` — teleport to a warp
 - `/respawnpoints admin unbind/bind <id> <player>` — manage anyone's bindings
 - `/respawnpoints admin beds|bind|unbind … offline <player>` — same, but Tab shows offline players only (e.g. `admin bind <id> offline test`)
+- `/respawnpoints admin player <player> cooldown <id> <get|reset|set|add|remove> [seconds]` — per-point cooldowns
+- `/respawnpoints admin player offline <player> cooldown …` — same for offline players (warp ids complete quoted)
 
 Debug (admin):
 - `/respawnpoints debug inspect` — click a bed/anchor to inspect it
 
-Config `config/respawnpoints-server.json`: `bedLimit`, `nearDeathRadius`, `nearDeathMinDistance`, `showSpawn`, `showNearDeath` — reload live via `admin reload`, host settings also editable from the main menu (YACL).
+Config `config/respawnpoints-server.json`: `bedLimit`, `enableNearDeath`, `nearDeathRadius`, `nearDeathMinDistance`, `nearDeathCooldownSec`, `showSpawn`, `showNearDeath` — reload live via `admin reload`, host settings also editable from the main menu (YACL).
 </details>
 
 ## Inspired by

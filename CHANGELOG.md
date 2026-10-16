@@ -2,83 +2,30 @@
 
 ## 1.0.7 — Universal per-point cooldowns
 
-- Cooldowns are now per point id (`neardeath`, `spawn`, `warp:<name>`, bed/anchor
-  UUIDs), stored as end-timestamps in a `Cooldowns` NBT tag (memory map + atomic
-  offline file surgery); expired keys are dropped so NBT never litters.
-- New admin commands (online + `offline` branches, one-to-one with beds/bind):
-  `admin player <player> cooldown <id> <get|reset|set|add|remove> [seconds]`
-  and `admin player offline <player> cooldown …`; warp ids complete quoted.
-  Editing a dead player with an open offer refreshes their screen live.
-- Any entry may now carry a cooldown: gray + live timer on both screens,
-  server-rejected on select (depleted anchors keep their own text first).
-- Fixed the command path: the missing `cooldown` literal is back, so the form is
-  `admin player <player> cooldown <id> <op> [seconds]` (and the offline branch).
+- Added: cooldowns on any point (`neardeath`, `spawn`, `warp:<name>`, beds/anchors) with admin commands `admin player <player> cooldown <id> <get|reset|set|add|remove> [seconds]` and the `offline` branch (warp ids complete quoted; editing the dead refreshes their screen live). Expired cooldowns clean themselves up.
+- Changed: any entry can show a cooldown (gray + live timer); spent anchors still show “depleted” first.
+- Fixed: the missing `cooldown` word in the command path.
 
 ## 1.0.6 — Near-death gate fix + master switch
 
-- Fixed `ChunkGate` never accepting disk chunks (the Status visitor halted at
-  the root, so only loaded chunks passed): the visitor now descends with
-  CONTINUE, captures the Status field and halts; non-full stages log at debug.
-- New `enableNearDeath` master switch (default off): disabled skips all
-  near-death logic including the feasibility probes; `showNearDeath` stays as
-  the visibility flag. Server-enforced in validation too.
-- Death offers log their composition at debug
-  (`entries count + near-death ok/cooldown/banned/off/hidden`).
-- Config key order fixed (`bedLimit → enableNearDeath → … → showNearDeath`);
-  `admin reload` prints all 7 settings.
-- Cooldown timer ticks live on the client (no traffic, floors at 0:00); the
-  button stays gray until the server push. A 1/sec server tick pushes dead
-  players whose cooldown just expired (no ack protocol — TCP delivery).
+- Added: `enableNearDeath` master switch; live ticking cooldown timer; the server sends the update itself when the cooldown hits zero.
+- Fixed: saved (but unloaded) chunks count for the search again; config key order; `admin reload` prints all 7 settings.
 
 ## 1.0.5 — Cooldown protocol cleanup
 
-- Near-death cooldown moved off `charges` onto its own `RespawnEntry.cooldownSec`
-  wire field (-1 = none, 0 = ready, >0 = seconds left); anchor charges untouched.
-- No behavior change vs 1.0.4 besides the cleaner encoding.
+- Changed: internal encoding cleanup, no visible changes.
 
-## 1.0.4 — Near-death rework (explored chunks only)
+## 1.0.4 — Near-death rework
 
-- Random spot only lands where chunks are loaded now or saved FULL on disk
-  (vanilla `chunkScanner` gate with a Status check, shared region handles,
-  per-search probe cache); new chunks are never generated, so no 3x3 map
-  squares and no drift into the unknown.
-- Three passes: dry-safe (heightmap first, then a small cave scan; lava, fire,
-  cactus, magma, campfires, powder snow banned), dry-risky (walkable danger,
-  lava/fire/water still banned), swim (water surface, no bubble columns).
-  Above the Nether roof spawns straight onto the roof top.
-- Nothing found means banned: the random entry is not offered (cheap
-  feasibility precheck in the death offer), no more corpse fallback.
-- 5-minute cooldown after using the random spot (Rust-style,
-  `nearDeathCooldownSec`, 0 = disabled): the entry stays visible but gray with
-  a live timer snapshot, unselectable on both screens, server-rejected if
-  forged; survives logout via player NBT.
-- Defaults are now 512–1024 (`nearDeathRadius=1024`, `nearDeathMinDistance=512`;
-  clamps 16–2048 / 0–1024, YACL sliders match); sqrt-distributed ring sampling.
-- Attempts and disk loads are bounded (48/32/16 tries, 8 loads max), all
-  memory-first; `>200ms` searches still warn in the log.
+- Added: the random spot only lands on existing chunks (nothing new is generated); safe / risky / swim passes; Nether roof spawns on top; 5-minute cooldown after use; the entry is hidden when nothing suitable is around. Defaults are now 512–1024.
 
 ## 1.0.3 — Frozen confirm state
 
-- Xaero death screen: after Confirm the bottom-left button turns dark green
-  (frozen) instead of gray and keeps the confirm label; no centered text.
-- While frozen, all sidebar clicks, scroll and the dimension dropdown are
-  swallowed until vanilla takes over (or a fresh server offer unfreezes).
-- Rejected choices still unfreeze via a new server offer (`resetForNewOffer`).
+- Added: after confirming, the button turns dark green and the screen ignores clicks until vanilla takes over.
 
 ## 1.0.2 — Code health (no behavior changes)
 
-- Server click logic unified: Fabric and NeoForge share `ServerInteractionLogic`
-  (capture → anchor-touch → charging refresh → shift-rename); loaders are thin adapters.
-- Selection screens share ordering and delete: `RespawnScreenModel.sorted()`
-  (near-death first, spawn last, rest by distance) and two-step `DeleteArm`;
-  the fallback list now sorts like the Xaero view; charge texts share `ScreenTexts`.
-- Point checks unified in `PointValidator` (bed/anchor/warp predicates, lenient
-  display vs strict select); `DeathManager` delegates, charge refresh reuses it.
-- Small dedups: single rate-limit path in `ServerHandlers`, `Slugs.slugify()`
-  for warp ids, direct `ScreenUtils`/`EntryNames`/`MapIntegrations` calls (no proxies).
-- Shared constants: `Limits` (ids, names, rate-limit) and `UiConstants` (layout).
-- Warp NBT gains `Version` with a corruption log on load; empty-offer fallback
-  is a named `ClientFeedback.fallBackToVanillaSilent()` policy.
+- Changed: internal code cleanup, no visible changes.
 
 ## 1.0.1
 
