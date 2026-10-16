@@ -32,7 +32,7 @@ public final class PlayerRespawnData {
     private static final String SPAWN_HIDDEN = "SpawnHidden";
     private static final String SPAWN_NAME = "SpawnName";
     private static final String BLOCKED = "Blocked";
-    private static final String LAST_NEAR_DEATH_USE = "LastNearDeathUse";
+    private static final String COOLDOWNS = "Cooldowns";
 
     private static final Map<UUID, Data> STORE = new ConcurrentHashMap<>();
 
@@ -59,7 +59,7 @@ public final class PlayerRespawnData {
         final List<BlockedSpot> blocked = new ArrayList<>();
         boolean spawnHidden;
         String spawnName = "";
-        long lastNearDeathUse;
+        final Map<String, Long> cooldowns = new LinkedHashMap<>();
     }
 
     private static Data data(ServerPlayer player) {
@@ -116,7 +116,13 @@ public final class PlayerRespawnData {
         tag.put(POINTS, list);
         tag.putBoolean(SPAWN_HIDDEN, data.spawnHidden);
         tag.putString(SPAWN_NAME, data.spawnName);
-        tag.putLong(LAST_NEAR_DEATH_USE, data.lastNearDeathUse);
+        CompoundTag cooldowns = new CompoundTag();
+        for (Map.Entry<String, Long> e : data.cooldowns.entrySet()) {
+            if (e.getValue() != null && e.getValue() > System.currentTimeMillis()) {
+                cooldowns.putLong(e.getKey(), e.getValue());
+            }
+        }
+        tag.put(COOLDOWNS, cooldowns);
         ListTag blocked = new ListTag();
         for (BlockedSpot spot : data.blocked) {
             CompoundTag e = new CompoundTag();
@@ -158,8 +164,19 @@ public final class PlayerRespawnData {
             }
             data.spawnHidden = tag.getBoolean(SPAWN_HIDDEN);
             data.spawnName = tag.contains(SPAWN_NAME, Tag.TAG_STRING) ? tag.getString(SPAWN_NAME) : "";
-            data.lastNearDeathUse = tag.contains(LAST_NEAR_DEATH_USE, Tag.TAG_LONG)
-                    ? tag.getLong(LAST_NEAR_DEATH_USE) : 0L;
+            // Legacy LastNearDeathUse is intentionally not read (dropped on save).
+            if (tag.contains(COOLDOWNS, Tag.TAG_COMPOUND)) {
+                CompoundTag cooldowns = tag.getCompound(COOLDOWNS);
+                for (String key : cooldowns.getAllKeys()) {
+                    try {
+                        long untilMs = cooldowns.getLong(key);
+                        if (untilMs > System.currentTimeMillis()) {
+                            data.cooldowns.put(key, untilMs);
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
             ListTag blocked = tag.getList(BLOCKED, Tag.TAG_COMPOUND);
             for (int i = 0; i < blocked.size(); i++) {
                 CompoundTag e = blocked.getCompound(i);
@@ -236,29 +253,37 @@ public final class PlayerRespawnData {
         data(player).spawnName = name == null ? "" : name;
     }
 
-    /** Epoch millis of the last successful near-death respawn, 0 = never (no cooldown). */
-    public static long lastNearDeathUse(ServerPlayer player) {
-        return data(player).lastNearDeathUse;
-    }
-
-    public static void setLastNearDeathUse(ServerPlayer player, long epochMillis) {
-        data(player).lastNearDeathUse = epochMillis;
-    }
-
     /**
-     * Remaining near-death cooldown, millis. Zero means ready: never used,
-     * cooldown disabled, or already elapsed.
+     * Per-point cooldowns: id -&gt; unix millis when it ends. Expired entries
+     * are dropped lazily (never persisted, never reported).
      */
-    public static long nearDeathCooldownRemainingMs(ServerPlayer player) {
-        long last = data(player).lastNearDeathUse;
-        if (last <= 0) {
+    public static java.util.Map<String, Long> cooldowns(ServerPlayer player) {
+        return java.util.Map.copyOf(data(player).cooldowns);
+    }
+
+    public static void setCooldown(ServerPlayer player, String id, long untilMs) {
+        if (untilMs <= System.currentTimeMillis()) {
+            data(player).cooldowns.remove(id);
+        } else {
+            data(player).cooldowns.put(id, untilMs);
+        }
+    }
+
+    public static void removeCooldown(ServerPlayer player, String id) {
+        data(player).cooldowns.remove(id);
+    }
+
+    /** Remaining cooldown millis for a point id, 0 when none. */
+    public static long cooldownRemainingMs(ServerPlayer player, String id) {
+        Long untilMs = data(player).cooldowns.get(id);
+        if (untilMs == null) {
             return 0;
         }
-        long cooldownMs = (long) RespawnConfig.getNearDeathCooldownSec() * 1000L;
-        if (cooldownMs <= 0) {
+        if (untilMs <= System.currentTimeMillis()) {
+            data(player).cooldowns.remove(id);
             return 0;
         }
-        return Math.max(0, cooldownMs - (System.currentTimeMillis() - last));
+        return untilMs - System.currentTimeMillis();
     }
 
     public static List<BlockedSpot> blocked(ServerPlayer player) {

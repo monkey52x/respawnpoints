@@ -84,8 +84,11 @@ public final class PointValidator {
         return isBedHead(level, record.pos().pos());
     }
 
-    /** Strict select-time check: mirrors the old DeathManager.validate 1:1. */
+    /** Strict select-time check (any active per-point cooldown rejects). */
     public static boolean isSelectable(ServerPlayer player, RespawnEntry entry) {
+        if (PlayerRespawnData.cooldownRemainingMs(player, entry.id()) > 0) {
+            return false;
+        }
         return switch (entry.type()) {
             case SPAWN -> !PlayerRespawnData.isSpawnHidden(player);
             case BED, ANCHOR -> {
@@ -117,8 +120,7 @@ public final class PointValidator {
                 yield warp != null && warp.pos().equals(entry.pos())
                         && warp.dimension().equals(entry.dimension());
             }
-            case NEAR_DEATH -> RespawnConfig.isEnableNearDeath()
-                    && PlayerRespawnData.nearDeathCooldownRemainingMs(player) <= 0;
+            case NEAR_DEATH -> RespawnConfig.isEnableNearDeath();
         };
     }
 

@@ -176,12 +176,13 @@ public final class DeathManager {
             }
             boolean cooling = false;
             for (RespawnEntry entry : pending.entries()) {
-                if (entry.type() == RespawnPointsType.NEAR_DEATH && entry.cooldownSec() > 0) {
+                if (entry.cooldownSec() > 0
+                        && PlayerRespawnData.cooldownRemainingMs(player, entry.id()) <= 0) {
                     cooling = true;
                     break;
                 }
             }
-            if (!cooling || PlayerRespawnData.nearDeathCooldownRemainingMs(player) > 0) {
+            if (!cooling) {
                 continue;
             }
             try {
@@ -371,10 +372,17 @@ public final class DeathManager {
             refresh(player);
             return;
         }
-        if (chosen.type() == RespawnPointsType.NEAR_DEATH) {
-            PlayerRespawnData.setLastNearDeathUse(player, System.currentTimeMillis());
+        if (chosen.type() == RespawnPointsType.NEAR_DEATH
+                && RespawnConfig.getNearDeathCooldownSec() > 0) {
+            PlayerRespawnData.setCooldown(player, "neardeath",
+                    System.currentTimeMillis() + (long) RespawnConfig.getNearDeathCooldownSec() * 1000L);
         }
         PENDING.remove(player.getUUID(), pending);
+    }
+
+    /** True when the player has a pending death offer (for post-mutation pushes). */
+    public static boolean hasPendingOffer(ServerPlayer player) {
+        return PENDING.containsKey(player.getUUID());
     }
 
     private static void refresh(ServerPlayer player) {
@@ -550,12 +558,10 @@ public final class DeathManager {
             } else if (!NearDeathSearch.isFeasible(player)) {
                 nearDeathState = "banned (nothing saved in band)";
             } else {
-                // Cooldown has its own field: > 0 seconds left = gray and
-                // unselectable, 0 = ready, -1 = none. Charges stay honest (-1).
-                long remainingMs = PlayerRespawnData.nearDeathCooldownRemainingMs(player);
-                int cooldownSec = remainingMs > 0
-                        ? (int) Math.min(Integer.MAX_VALUE, (remainingMs + 999) / 1000)
-                        : 0;
+                // Per-point cooldown: > 0 seconds left = gray and unselectable,
+                // 0 = ready, -1 = none. Charges stay honest (-1).
+                long remainingMs = PlayerRespawnData.cooldownRemainingMs(player, "neardeath");
+                int cooldownSec = cooldownWire(remainingMs, RespawnConfig.getNearDeathCooldownSec() > 0);
                 entries.add(new RespawnEntry("neardeath", RespawnPointsType.NEAR_DEATH,
                         "Near death (random)", "?", 0xAAAAAA,
                         player.level().dimension().location().toString(), deathPos, true, -1, cooldownSec));
@@ -589,10 +595,12 @@ public final class DeathManager {
                     }
                 }
                 entries.add(new RespawnEntry(record.id().toString(), RespawnPointsType.ANCHOR,
-                        display, "⚓", snapshot.color(), dimName, snapshot.pos(), false, charges, -1));
+                        display, "⚓", snapshot.color(), dimName, snapshot.pos(), false, charges,
+                        cooldownWire(PlayerRespawnData.cooldownRemainingMs(player, record.id().toString()), false)));
             } else {
                 entries.add(new RespawnEntry(record.id().toString(), RespawnPointsType.BED,
-                        display, "🛏", snapshot.color(), dimName, snapshot.pos(), false, -1, -1));
+                        display, "🛏", snapshot.color(), dimName, snapshot.pos(), false, -1,
+                        cooldownWire(PlayerRespawnData.cooldownRemainingMs(player, record.id().toString()), false)));
             }
         }
 
@@ -604,7 +612,8 @@ public final class DeathManager {
             }
             entries.add(new RespawnEntry("warp:" + warp.id(), RespawnPointsType.WARP,
                     warp.name(), warp.symbol().isEmpty() ? "★" : warp.symbol(),
-                    0xFFFF55, warp.dimension(), warp.pos(), false, -1, -1));
+                    0xFFFF55, warp.dimension(), warp.pos(), false, -1,
+                    cooldownWire(PlayerRespawnData.cooldownRemainingMs(player, "warp:" + warp.id()), false)));
         }
 
         if (RespawnConfig.isShowSpawn() && !PlayerRespawnData.isSpawnHidden(player)) {
@@ -615,12 +624,21 @@ public final class DeathManager {
             entries.add(new RespawnEntry("spawn", RespawnPointsType.SPAWN,
                     PlayerRespawnData.spawnName(player),
                     "⌘",
-                    0xFFFF00, Level.OVERWORLD.location().toString(), spawn, false, -1, -1));
+                    0xFFFF00, Level.OVERWORLD.location().toString(), spawn, false, -1,
+                    cooldownWire(PlayerRespawnData.cooldownRemainingMs(player, "spawn"), false)));
         }
 
         Constants.LOG.debug("Death offer for {}: {} entries, near-death {}",
                 player.getScoreboardName(), entries.size(), nearDeathState);
         return entries;
+    }
+
+    /** Cooldown wire value for any entry id: ceil seconds, 0 = ready (tracked), -1 = none. */
+    private static int cooldownWire(long remainingMs, boolean tracked) {
+        if (remainingMs > 0) {
+            return (int) Math.min(Integer.MAX_VALUE, (remainingMs + 999) / 1000);
+        }
+        return tracked ? 0 : -1;
     }
 
     /** Lenient dimension parse: null on corrupt NBT instead of throwing. */

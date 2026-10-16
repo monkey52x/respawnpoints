@@ -891,13 +891,15 @@ public class XaeroRespawnScreen extends GuiMap
                 ? sortedEntries.get(selectedIdx) : null;
         boolean depleted = current != null && ScreenUtils.isDepleted(current);
         boolean onCooldown = current != null && ScreenTexts.isCooldown(current);
+        boolean anchorDepleted = current != null
+                && current.type() == RespawnPointsType.ANCHOR && current.charges() == 0;
         boolean frozen = respawning && !com.vlogf.respawnpoints.client.RespawnClientConfig.loadingOverlay();
         boolean enabled = current != null && !depleted && !respawning;
         boolean hovered = enabled && mouseX >= btnX && mouseX <= btnX + btnW
                 && mouseY >= btnY && mouseY <= btnY + btnH;
         drawPanelButton(graphics, btnX, btnY, btnW, btnH,
-                onCooldown ? Component.translatable("respawnpoints.screen.on_cooldown")
-                        : (depleted ? Component.translatable("respawnpoints.screen.anchor_depleted")
+                anchorDepleted ? Component.translatable("respawnpoints.screen.anchor_depleted")
+                        : (onCooldown ? Component.translatable("respawnpoints.screen.on_cooldown")
                                 : ((enabled || frozen) ? Component.translatable("respawnpoints.screen.confirm")
                                         : Component.translatable("respawnpoints.screen.select_point"))),
                 enabled, hovered, frozen);

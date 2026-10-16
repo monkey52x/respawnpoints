@@ -73,8 +73,7 @@ public final class OfflinePlayerData {
     }
 
     /** Vanilla idiom: .dat first, .dat_old fallback. */
-    private static CompoundTag readPlayerFile(Path file) {
-        try {
+    private static CompoundTag readPlayerFile(Path file) {        try {
             return net.minecraft.nbt.NbtIo.readCompressed(file,
                     net.minecraft.nbt.NbtAccounter.unlimitedHeap());
         } catch (Exception ignored) {
@@ -232,6 +231,95 @@ public final class OfflinePlayerData {
         e.putInt("Color", record.color());
         kept.add(e);
         tag.put("Points", kept);
+        root.put("RespawnPoints", tag);
+        try {
+            if (Files.isRegularFile(file)) {
+                Path bak = file.resolveSibling(file.getFileName() + ".bak");
+                Files.copy(file, bak, StandardCopyOption.REPLACE_EXISTING);
+            }
+            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+            net.minecraft.nbt.NbtIo.writeCompressed(root, tmp);
+            Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            return true;
+        } catch (Exception ex) {
+            Constants.LOG.warn("Could not write player data for {}", uuid, ex);
+            return false;
+        }
+    }
+
+    /**
+     * Active cooldowns from an offline player's file (id -&gt; end millis).
+     * Expired entries are skipped (never resurrected, never reported).
+     */
+    public static java.util.Map<String, Long> readCooldowns(MinecraftServer server, UUID uuid) {
+        java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+        Path file = playerFile(server, uuid);
+        if (!Files.isRegularFile(file)) {
+            return out;
+        }
+        CompoundTag root = readPlayerFile(file);
+        if (root == null || !root.contains("RespawnPoints", Tag.TAG_COMPOUND)) {
+            return out;
+        }
+        CompoundTag tag = root.getCompound("RespawnPoints");
+        if (!tag.contains("Cooldowns", Tag.TAG_COMPOUND)) {
+            return out;
+        }
+        CompoundTag cooldowns = tag.getCompound("Cooldowns");
+        long now = System.currentTimeMillis();
+        for (String key : cooldowns.getAllKeys()) {
+            try {
+                long untilMs = cooldowns.getLong(key);
+                if (untilMs > now) {
+                    out.put(key, untilMs);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Set ({@code untilMs} non-null) or remove (null) one cooldown in an
+     * offline player's file. Creates the section when missing, drops expired
+     * and removed keys so NBT never litters. Atomic tmp + move, .bak,
+     * vanilla tags untouched.
+     *
+     * @return true if the file now reflects the change.
+     */
+    public static boolean writeCooldown(MinecraftServer server, UUID uuid, String id, Long untilMs) {
+        Path file = playerFile(server, uuid);
+        CompoundTag root = Files.isRegularFile(file) ? readPlayerFile(file) : new CompoundTag();
+        if (root == null) {
+            Constants.LOG.warn("Could not read player data for {}", uuid);
+            return false;
+        }
+        CompoundTag tag = new CompoundTag();
+        if (root.contains("RespawnPoints", Tag.TAG_COMPOUND)) {
+            tag = root.getCompound("RespawnPoints");
+        }
+        CompoundTag cooldowns = new CompoundTag();
+        if (tag.contains("Cooldowns", Tag.TAG_COMPOUND)) {
+            cooldowns = tag.getCompound("Cooldowns");
+        }
+        long now = System.currentTimeMillis();
+        for (String key : new java.util.ArrayList<>(cooldowns.getAllKeys())) {
+            try {
+                if (cooldowns.getLong(key) <= now) {
+                    cooldowns.remove(key);
+                }
+            } catch (Exception ignored) {
+                cooldowns.remove(key);
+            }
+        }
+        if (untilMs == null) {
+            cooldowns.remove(id);
+        } else if (untilMs > now) {
+            cooldowns.putLong(id, untilMs);
+        } else {
+            cooldowns.remove(id);
+        }
+        tag.put("Cooldowns", cooldowns);
         root.put("RespawnPoints", tag);
         try {
             if (Files.isRegularFile(file)) {

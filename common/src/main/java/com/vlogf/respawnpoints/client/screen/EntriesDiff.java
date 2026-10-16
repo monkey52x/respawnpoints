@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * Structural diff for respawn lists. Data-only = same ids in the same order
  * with the same names/positions/dimensions/symbols/types/visibility; only
- * charges and colors may differ. Anything else needs a full rebuild.
+ * charges, colors and cooldown seconds may differ. Anything else needs a full rebuild.
  */
 public final class EntriesDiff {
     private EntriesDiff() {

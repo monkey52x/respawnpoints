@@ -1,6 +1,7 @@
 package com.vlogf.respawnpoints.server;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.vlogf.respawnpoints.util.Slugs;
@@ -116,6 +117,14 @@ public final class RespawnCommands {
                                         .executes(ctx -> adminBind(ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "id"),
 StringArgumentType.getString(ctx, "player")))))));
+        var playerCmd = Commands.literal("player");
+        playerCmd.then(Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
+                .then(cooldownSub(false)));
+        playerCmd.then(Commands.literal("offline")
+                .then(Commands.argument("player", StringArgumentType.string())
+                        .suggests(offlinePlayerNameSuggestions())
+                        .then(cooldownSub(true))));
+        admin.then(playerCmd);
 
         var spawn = Commands.literal("spawn");
         spawn.then(Commands.literal("hide").executes(ctx -> setSpawnHidden(ctx.getSource(), true)));
@@ -283,6 +292,94 @@ StringArgumentType.getString(ctx, "player")))))));
             java.util.function.Function<com.mojang.brigadier.context.CommandContext<CommandSourceStack>,
                     java.util.List<String>> ids) {
         return (ctx, builder) -> SharedSuggestionProvider.suggest(ids.apply(ctx).stream(), builder);
+    }
+
+    /**
+     * Cooldown id suggester: neardeath, spawn, the target's points, all warps
+     * (quoted, since string() needs quotes around ':'), plus stored cooldown keys.
+     */
+    private static SuggestionProvider<CommandSourceStack> cooldownIdSuggestions(boolean offline) {
+        return (ctx, builder) -> {
+            var server = ctx.getSource().getServer();
+            if (server == null) {
+                return builder.buildFuture();
+            }
+            java.util.Set<String> ids = new java.util.LinkedHashSet<>();
+            ids.add("neardeath");
+            ids.add("spawn");
+            UUID uuid = null;
+            if (offline) {
+                try {
+                    var target = resolvePlayerTarget(ctx.getSource(),
+                            StringArgumentType.getString(ctx, "player"));
+                    uuid = target.uuid();
+                } catch (Exception ignored) {
+                }
+            } else {
+                try {
+                    uuid = net.minecraft.commands.arguments.EntityArgument
+                            .getPlayer(ctx, "player").getUUID();
+                } catch (Exception ignored) {
+                }
+            }
+            if (uuid != null) {
+                ServerPlayer online = server.getPlayerList().getPlayer(uuid);
+                if (online != null) {
+                    for (var snapshot : PlayerRespawnData.points(online)) {
+                        ids.add(snapshot.id());
+                    }
+                    ids.addAll(PlayerRespawnData.cooldowns(online).keySet());
+                } else {
+                    for (var snapshot : OfflinePlayerData.readSnapshots(server, uuid)) {
+                        ids.add(snapshot.id());
+                    }
+                }
+                ids.addAll(OfflinePlayerData.readCooldowns(server, uuid).keySet());
+            }
+            for (var warp : WarpStorage.get(server.overworld()).all()) {
+                ids.add("warp:" + warp.id());
+            }
+            for (String id : ids) {
+                if (id.contains(":") || id.contains(" ")) {
+                    builder.suggest("\"" + id + "\"");
+                } else {
+                    builder.suggest(id);
+                }
+            }
+            return builder.buildFuture();
+        };
+    }
+
+    /** Shared `admin player [...] cooldown <id> <op> [seconds]` subtree (online + offline forms). */
+    private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> cooldownSub(
+            boolean offline) {
+        var id = Commands.argument("id", StringArgumentType.string())
+                .suggests(cooldownIdSuggestions(offline));
+        for (String op : java.util.List.of("get", "reset")) {
+            final String operation = op;
+            id.then(Commands.literal(operation).executes(ctx -> offline
+                    ? adminPlayerCooldown(ctx.getSource(),
+                            StringArgumentType.getString(ctx, "player"),
+                            StringArgumentType.getString(ctx, "id"), operation, -1)
+                    : adminPlayerCooldown(ctx.getSource(),
+                            net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player"),
+                            StringArgumentType.getString(ctx, "id"), operation, -1)));
+        }
+        for (String op : java.util.List.of("set", "add", "remove")) {
+            final String operation = op;
+            id.then(Commands.literal(operation)
+                    .then(Commands.argument("seconds", IntegerArgumentType.integer(1))
+                            .executes(ctx -> offline
+                                    ? adminPlayerCooldown(ctx.getSource(),
+                                            StringArgumentType.getString(ctx, "player"),
+                                            StringArgumentType.getString(ctx, "id"), operation,
+                                            IntegerArgumentType.getInteger(ctx, "seconds"))
+                                    : adminPlayerCooldown(ctx.getSource(),
+                                            net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player"),
+                                            StringArgumentType.getString(ctx, "id"), operation,
+                                            IntegerArgumentType.getInteger(ctx, "seconds")))));
+        }
+        return id;
     }
 
     /** Require the player's own bound record, or report unknown_point. Null when rejected. */
@@ -815,6 +912,161 @@ StringArgumentType.getString(ctx, "player")))))));
         }
         src.sendFailure(tr("respawnpoints.cmd.unknown_point", id));
         return 0;
+    }
+
+    /** "300s (5:00)" for cooldown feedback. */
+    private static String cooldownDisplay(long remainingMs) {
+        long total = Math.max(0, (remainingMs + 999) / 1000);
+        return total + "s (" + (total / 60) + ":" + String.format("%02d", total % 60) + ")";
+    }
+
+    /** Refresh an open death screen after an admin cooldown edit. */
+    private static void pushIfDeadWithOffer(ServerPlayer target) {
+        if (!target.isAlive() && DeathManager.hasPendingOffer(target)) {
+            DeathManager.pushUpdate(target);
+        }
+    }
+
+    /** Admin per-point cooldown on a live player. Seconds < 0 means no argument (get/reset). */
+    private static int adminPlayerCooldown(CommandSourceStack src, ServerPlayer target,
+                                           String id, String op, int seconds) {
+        long now = System.currentTimeMillis();
+        String display = target.getScoreboardName();
+        switch (op) {
+            case "get" -> {
+                long remaining = PlayerRespawnData.cooldownRemainingMs(target, id);
+                if (remaining <= 0) {
+                    src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_none", display, id), false);
+                } else {
+                    src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_get", display, id,
+                            cooldownDisplay(remaining)), false);
+                }
+                return 1;
+            }
+            case "reset" -> {
+                PlayerRespawnData.removeCooldown(target, id);
+                pushIfDeadWithOffer(target);
+                src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_reset", display, id), true);
+                return 1;
+            }
+            case "set" -> {
+                PlayerRespawnData.setCooldown(target, id, now + (long) seconds * 1000L);
+                pushIfDeadWithOffer(target);
+                src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_set", display, id,
+                        cooldownDisplay((long) seconds * 1000L)), true);
+                return 1;
+            }
+            case "add" -> {
+                Long cur = PlayerRespawnData.cooldowns(target).get(id);
+                long base = cur != null && cur > now ? cur : now;
+                PlayerRespawnData.setCooldown(target, id, base + (long) seconds * 1000L);
+                pushIfDeadWithOffer(target);
+                src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_add", display, id,
+                        cooldownDisplay(base + (long) seconds * 1000L - now)), true);
+                return 1;
+            }
+            default -> { // remove
+                Long cur = PlayerRespawnData.cooldowns(target).get(id);
+                if (cur == null || cur <= now) {
+                    PlayerRespawnData.removeCooldown(target, id);
+                    src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_none", display, id), false);
+                    return 1;
+                }
+                long next = cur - (long) seconds * 1000L;
+                if (next <= now) {
+                    PlayerRespawnData.removeCooldown(target, id);
+                    pushIfDeadWithOffer(target);
+                    src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_reset", display, id), true);
+                    return 1;
+                }
+                PlayerRespawnData.setCooldown(target, id, next);
+                pushIfDeadWithOffer(target);
+                src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_remove", display, id,
+                        cooldownDisplay(next - now)), true);
+                return 1;
+            }
+        }
+    }
+
+    /** Admin per-point cooldown by name: live path or offline file surgery (mirror of bind/unbind). */
+    private static int adminPlayerCooldown(CommandSourceStack src, String playerName,
+                                           String id, String op, int seconds) {
+        var server = src.getServer();
+        PlayerTarget target = resolvePlayerTarget(src, playerName);
+        if (target.online() != null) {
+            return adminPlayerCooldown(src, target.online(), id, op, seconds);
+        }
+        if (!target.known()) {
+            src.sendFailure(tr("respawnpoints.cmd.unknown_player", playerName));
+            return 0;
+        }
+        // Raced login between resolve and edit: take the live path instead of the file.
+        ServerPlayer raced = server.getPlayerList().getPlayer(target.uuid());
+        if (raced != null) {
+            return adminPlayerCooldown(src, raced, id, op, seconds);
+        }
+        String display = playerDisplayName(server, target.uuid());
+        long now = System.currentTimeMillis();
+        switch (op) {
+            case "get" -> {
+                long remaining = Math.max(0, OfflinePlayerData.readCooldowns(server, target.uuid())
+                        .getOrDefault(id, 0L) - now);
+                if (remaining <= 0) {
+                    src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_none", display, id), false);
+                } else {
+                    src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_get", display, id,
+                            cooldownDisplay(remaining)), false);
+                }
+                return 1;
+            }
+            case "reset" -> {
+                if (!OfflinePlayerData.writeCooldown(server, target.uuid(), id, null)) {
+                    src.sendFailure(tr("respawnpoints.cmd.cooldown_write_failed", display));
+                    return 0;
+                }
+                src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_reset", display, id), true);
+                return 1;
+            }
+            case "set" -> {
+                if (!OfflinePlayerData.writeCooldown(server, target.uuid(), id, now + (long) seconds * 1000L)) {
+                    src.sendFailure(tr("respawnpoints.cmd.cooldown_write_failed", display));
+                    return 0;
+                }
+                src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_set", display, id,
+                        cooldownDisplay((long) seconds * 1000L)), true);
+                return 1;
+            }
+            case "add" -> {
+                Long cur = OfflinePlayerData.readCooldowns(server, target.uuid()).get(id);
+                long base = cur != null && cur > now ? cur : now;
+                if (!OfflinePlayerData.writeCooldown(server, target.uuid(), id, base + (long) seconds * 1000L)) {
+                    src.sendFailure(tr("respawnpoints.cmd.cooldown_write_failed", display));
+                    return 0;
+                }
+                src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_add", display, id,
+                        cooldownDisplay(base + (long) seconds * 1000L - now)), true);
+                return 1;
+            }
+            default -> { // remove
+                Long cur = OfflinePlayerData.readCooldowns(server, target.uuid()).get(id);
+                if (cur == null || cur <= now) {
+                    src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_none", display, id), false);
+                    return 1;
+                }
+                long next = cur - (long) seconds * 1000L;
+                if (!OfflinePlayerData.writeCooldown(server, target.uuid(), id, next <= now ? null : next)) {
+                    src.sendFailure(tr("respawnpoints.cmd.cooldown_write_failed", display));
+                    return 0;
+                }
+                if (next <= now) {
+                    src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_reset", display, id), true);
+                } else {
+                    src.sendSuccess(() -> tr("respawnpoints.cmd.cooldown_remove", display, id,
+                            cooldownDisplay(next - now)), true);
+                }
+                return 1;
+            }
+        }
     }
 
     private static int armInspect(CommandSourceStack src) {

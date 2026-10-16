@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.7 — Universal per-point cooldowns
+
+- Cooldowns are now per point id (`neardeath`, `spawn`, `warp:<name>`, bed/anchor
+  UUIDs), stored as end-timestamps in a `Cooldowns` NBT tag (memory map + atomic
+  offline file surgery); expired keys are dropped so NBT never litters.
+- New admin commands (online + `offline` branches, one-to-one with beds/bind):
+  `admin player <player> cooldown <id> <get|reset|set|add|remove> [seconds]`
+  and `admin player offline <player> cooldown …`; warp ids complete quoted.
+  Editing a dead player with an open offer refreshes their screen live.
+- Any entry may now carry a cooldown: gray + live timer on both screens,
+  server-rejected on select (depleted anchors keep their own text first).
+
 ## 1.0.6 — Near-death gate fix + master switch
 
 - Fixed `ChunkGate` never accepting disk chunks (the Status visitor halted at
