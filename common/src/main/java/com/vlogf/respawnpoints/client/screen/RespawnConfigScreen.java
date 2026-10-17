@@ -29,7 +29,8 @@ public final class RespawnConfigScreen {
         var minecraft = Minecraft.getInstance();
         var builder = YetAnotherConfigLib.createBuilder()
                 .title(Component.translatable("respawnpoints.config.title"))
-                .category(lookCategory());
+                .category(lookCategory())
+                .category(mapCategory());
         // Map-manager choice is parked with JourneyMap support (Xaero-only for now).
         // Host settings live in the client's config dir and never touch a
         // foreign server: show them in singleplayer and in the main menu
@@ -58,7 +59,7 @@ public final class RespawnConfigScreen {
         return builder.build().generateScreen(parent);
     }
 
-    /** Map-manager choice UI (dormant while JourneyMap support is parked). */
+    /** Map-manager choice UI (Xaero and JourneyMap). */
     private static ConfigCategory mapCategory() {
         return ConfigCategory.createBuilder()
                 .name(Component.translatable("respawnpoints.config.map"))

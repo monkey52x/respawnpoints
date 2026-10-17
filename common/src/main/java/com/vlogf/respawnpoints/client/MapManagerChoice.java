@@ -41,17 +41,17 @@ public final class MapManagerChoice {
                 return sanitize(RespawnClientConfig.activeMap(), xaero, jm);
             }
         }
-        return RespawnClientConfig.resolve(xaero, jm);
+        if (!RespawnClientConfig.choiceMade()) {
+            return RespawnClientConfig.ActiveMap.NONE;
+        }
+        return sanitize(RespawnClientConfig.activeMap(), xaero, jm);
     }
 
     private static RespawnClientConfig.ActiveMap sanitize(RespawnClientConfig.ActiveMap map,
                                                            boolean xaero, boolean jm) {
-        // JourneyMap support is dormant: stored JOURNEYMAP migrates to AUTO.
-        if (map == RespawnClientConfig.ActiveMap.JOURNEYMAP) {
-            return RespawnClientConfig.ActiveMap.AUTO;
-        }
         return switch (map) {
             case XAERO -> xaero ? map : RespawnClientConfig.ActiveMap.NONE;
+            case JOURNEYMAP -> jm ? map : RespawnClientConfig.ActiveMap.NONE;
             case NONE -> RespawnClientConfig.ActiveMap.NONE;
             default -> xaero ? RespawnClientConfig.ActiveMap.XAERO
                     : RespawnClientConfig.ActiveMap.NONE;

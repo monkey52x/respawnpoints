@@ -37,13 +37,6 @@ versionRange = "[${xaero_worldmap_version},)"
 ordering = "NONE"
 side = "CLIENT"
 [[dependencies.${mod_id}]]
-modId = "journeymap"
-type = "incompatible"
-# JourneyMap is not supported: any installed version blocks loading with a clear error.
-versionRange = "[1.0.0,)"
-ordering = "NONE"
-side = "CLIENT"
-[[dependencies.${mod_id}]]
 modId = "yet_another_config_lib_v3"
 type = "optional"
 versionRange = "[${yacl_version_neoforge},)"

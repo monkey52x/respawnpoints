@@ -86,6 +86,13 @@ public final class ClientReadiness {
                 // World not loaded yet: don't burn the tick budget.
                 return;
             }
+            // If at least one map mod is installed but the player has not made
+            // a choice yet, wait: do not send ClientReady with NONE before the
+            // MapChoiceScreen selection is made.
+            boolean anyMap = MapIntegrations.isXaeroPresent() || MapIntegrations.isJourneyMapPresent();
+            if (anyMap && !RespawnClientConfig.choiceMade()) {
+                return;
+            }
             if (ticks++ >= MAX_TICKS) {
                 return;
             }
@@ -107,6 +114,7 @@ public final class ClientReadiness {
      * answers a dead player with the cached offer. Client-side throttle:
      * at most one resend per READY_RETRY window. */
     public static void onDeathScreenOpened() {
+        PendingRespawn.clearEmptyOffer();
         boolean doSend = false;
         synchronized (ClientReadiness.class) {
             if (helloReceived && (!readySent

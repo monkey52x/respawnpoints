@@ -7,56 +7,81 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-/** First-join prompt (dormant while JourneyMap support is parked: never prompted). */
+/**
+ * First-launch map selection screen. Shown once when no map manager has been
+ * chosen yet and at least one map mod (Xaero or JourneyMap) is installed.
+ * All buttons are centered horizontally; the "None" button sits at the
+ * bottom centre of the screen. Cannot be closed via Escape — a choice is
+ * required.
+ */
 public class MapChoiceScreen extends Screen {
-    private final java.util.UUID serverId;
+    private static final int BUTTON_W = 200;
+    private static final int BUTTON_H = 20;
+    private static final int BUTTON_GAP = 6;
 
-    public MapChoiceScreen(java.util.UUID serverId) {
+    public MapChoiceScreen() {
         super(Component.translatable("respawnpoints.mapchoice.title"));
-        this.serverId = serverId;
     }
 
     @Override
     protected void init() {
-        int w = 200;
-        int x = (width - w) / 2;
-        int y = height / 2 - 30;
+        int cx = (width - BUTTON_W) / 2;
+        int y = height / 3;
+
         boolean xaero = MapIntegrations.isXaeroPresent();
+        boolean jm = MapIntegrations.isJourneyMapPresent();
 
         if (xaero) {
-            addRenderableWidget(Button.builder(Component.literal("Xaero's Map"),
-                    b -> choose(RespawnClientConfig.ActiveMap.XAERO))
-                    .bounds(x, y, w, 20).build());
-            y += 24;
+            addRenderableWidget(Button.builder(
+                            Component.translatable("respawnpoints.mapchoice.xaero"),
+                            b -> choose(RespawnClientConfig.ActiveMap.XAERO))
+                    .bounds(cx, y, BUTTON_W, BUTTON_H)
+                    .build());
+            y += BUTTON_H + BUTTON_GAP;
         }
-        // JourneyMap button parked with the integration (dormant).
-        addRenderableWidget(Button.builder(Component.translatable("respawnpoints.mapchoice.auto"),
-                b -> choose(RespawnClientConfig.ActiveMap.AUTO))
-                .bounds(x, y, w, 20).build());
+        if (jm) {
+            addRenderableWidget(Button.builder(
+                            Component.translatable("respawnpoints.mapchoice.journeymap"),
+                            b -> choose(RespawnClientConfig.ActiveMap.JOURNEYMAP))
+                    .bounds(cx, y, BUTTON_W, BUTTON_H)
+                    .build());
+            y += BUTTON_H + BUTTON_GAP;
+        }
+
+        // "None" button at the bottom centre.
+        int noneY = height - 50;
+        addRenderableWidget(Button.builder(
+                        Component.translatable("respawnpoints.mapchoice.none"),
+                        b -> choose(RespawnClientConfig.ActiveMap.NONE))
+                .bounds(cx, noneY, BUTTON_W, BUTTON_H)
+                .build());
     }
 
     private void choose(RespawnClientConfig.ActiveMap map) {
-        RespawnClientConfig.setChoiceFor(serverId, map);
+        RespawnClientConfig.setChoice(map);
         minecraft.setScreen(null);
+    }
+
+    @Override
+    public boolean shouldCloseOnEsc() {
+        return false;
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics, mouseX, mouseY, partialTick);
         super.render(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(font, title, width / 2, height / 2 - 60, 0xFFFFFF);
+        graphics.drawCenteredString(font, title, width / 2, height / 3 - 40, 0xFFFFFF);
         graphics.drawCenteredString(font,
                 Component.translatable("respawnpoints.mapchoice.subtitle"),
-                width / 2, height / 2 - 46, 0xAAAAAA);
+                width / 2, height / 3 - 20, 0xAAAAAA);
     }
 
-    /** Open the prompt for a server the player never chose a manager for. */
-    public static void promptFor(java.util.UUID serverId) {
+    /** Open the map choice screen if no choice has been made yet. */
+    public static void promptIfNeeded() {
         var minecraft = net.minecraft.client.Minecraft.getInstance();
-        minecraft.execute(() -> {
-            if (minecraft.screen == null) {
-                minecraft.setScreen(new MapChoiceScreen(serverId));
-            }
-        });
+        if (!RespawnClientConfig.choiceMade() && minecraft.screen == null) {
+            minecraft.setScreen(new MapChoiceScreen());
+        }
     }
 }

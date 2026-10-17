@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.9 — JourneyMap support + YACL map choice
+
+- Added: JourneyMap waypoint sync (API v2.0.0) — respawn points appear in a
+  dedicated "Respawn Points" group, never mixed with the user's "Default"
+  group. Two-way colour sync: recolour a marker in JourneyMap and the change
+  is sent back to the server.
+- Added: JourneyMap plugin (`@JourneyMapPlugin`) subscribes to waypoint
+  events (colour changes, deletions) and mapping lifecycle events
+  (`MAPPING_STARTED` / `MAPPING_STOPPED`) for automatic group creation and
+  cleanup on server switch.
+- Changed: map-manager choice is now configured via YACL config screen
+  (`respawnpoints.config.map`) instead of a custom prompt. At first launch in
+  the main menu, the YACL config opens automatically if Xaero or JourneyMap
+  is installed. No auto-detection — the player must pick explicitly.
+- Changed: removed JourneyMap from mod incompatibilities (`breaks` /
+  `incompatible` dependency) — the mod now loads with JourneyMap installed.
+- Fixed: stale `hasEmptyOffer` flag is now cleared on `disarm()` and when the
+  DeathScreen opens, preventing an incorrect instant vanilla fallback after a
+  previous empty death offer.
+
 ## 1.0.8 — Fabric JourneyMap block, settings polish
 
 - Added: Fabric support (restored) — separate jar at parity with NeoForge (selection screen, points, cooldowns, commands); requires Fabric Loader, Fabric API and both Xaero maps.

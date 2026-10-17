@@ -42,6 +42,13 @@ public final class PendingRespawn {
     /** Drop the death-flow arm but keep live marker entries. */
     public static synchronized void disarm() {
         hasPending = false;
+        emptyOffer = false;
+    }
+
+    /** Clear the empty-offer flag so a stale one from a previous death
+     * can no longer trigger an immediate vanilla fallback. */
+    public static synchronized void clearEmptyOffer() {
+        emptyOffer = false;
     }
 
     public static synchronized boolean hasPending() {

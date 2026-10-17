@@ -50,6 +50,16 @@ public final class MapIntegrations {
         }
     }
 
+    /** Reflective clear of JourneyMap tracking (same pattern as clearXaeroTracking in ClientHandlers). */
+    public static void clearJourneyMapTracking() {
+        try {
+            Class<?> sync = Class.forName("com.vlogf.respawnpoints.integration.journeymap.JourneyMapWaypointSync");
+            sync.getMethod("clearTracking").invoke(null);
+        } catch (ReflectiveOperationException | LinkageError e) {
+            // Best effort only.
+        }
+    }
+
     /** Reflective Xaero session check (common code must not import xaero APIs). */    public static boolean isXaeroSessionReady() {
         try {
             Class<?> sessionClass = Class.forName("xaero.common.XaeroMinimapSession");

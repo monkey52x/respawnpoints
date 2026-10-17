@@ -23,6 +23,7 @@ public final class ClientHandlers {
         MapManagerChoice.onHello(packet.serverId());
         ClientReadiness.onHello();
         clearXaeroTracking(packet.serverId());
+        MapIntegrations.clearJourneyMapTracking();
     }
 
     /**
