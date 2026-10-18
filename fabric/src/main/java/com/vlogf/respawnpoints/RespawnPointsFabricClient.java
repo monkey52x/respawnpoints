@@ -26,8 +26,10 @@ public class RespawnPointsFabricClient implements ClientModInitializer {
             // (NONE) — показываем MapChoiceScreen. После любого выбора
             // (в т.ч. "Никакая" или "Отключено") choiceMade() станет true и
             // экран больше не покажется.
-            if (client.level == null && client.screen == null
-                    && RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE
+            if (client.level == null
+                    && !(client.screen instanceof MapChoiceScreen)
+                    && (RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE
+                            || RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.DISABLED)
                     && !MapChoiceScreen.isSessionSuppressed()) {
                 client.setScreen(new MapChoiceScreen());
             }

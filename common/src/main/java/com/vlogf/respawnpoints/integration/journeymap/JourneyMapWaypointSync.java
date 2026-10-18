@@ -145,8 +145,12 @@ public final class JourneyMapWaypointSync {
                         if (currentApi != null && respawnGroup != null) {
                             Waypoint restored = currentApi.getWaypoint(GROUP_MOD_ID, guid);
                             if (restored != null) {
-                                respawnGroup.addWaypoint(restored);
+                                // Follow Waystones pattern: api.addWaypoint first,
+                                // then add to group with lock toggle.
                                 currentApi.addWaypoint(GROUP_MOD_ID, restored);
+                                respawnGroup.setLocked(false);
+                                respawnGroup.addWaypoint(restored);
+                                respawnGroup.setLocked(true);
                             }
                         }
                     } finally {
@@ -201,7 +205,8 @@ public final class JourneyMapWaypointSync {
             }
             TRACKED_WAYPOINT_GUIDS.clear();
             LAST_COLOR.clear();
-            respawnGroup = null;
+            // Не сбрасываем respawnGroup: группа должна остаться, чтобы при
+            // повторном входе в мир не требовалось перезаходить для её воссоздания.
         } finally {
             internalUpdating = false;
         }
@@ -245,8 +250,13 @@ public final class JourneyMapWaypointSync {
                     wp.setCustomData(CUSTOM_KEY, entryId);
                     wp.setColor(color);
                     wp.setEnabled(true);
-                    group.addWaypoint(wp);
+                    // Follow Waystones pattern: api.addWaypoint first, then add to
+                    // group with lock toggle so the marker lands in our group,
+                    // not in JourneyMap's "Default" group.
                     currentApi.addWaypoint(GROUP_MOD_ID, wp);
+                    group.setLocked(false);
+                    group.addWaypoint(wp);
+                    group.setLocked(true);
                     String newGuid = wp.getGuid();
                     TRACKED_WAYPOINT_GUIDS.put(entryId, newGuid);
                     LAST_COLOR.put(entryId, color);
@@ -270,9 +280,12 @@ public final class JourneyMapWaypointSync {
                     wp.setPrimaryDimension(dim);
                     wp.setColor(color);
                     wp.setEnabled(true);
-                    // Re-add to group in case group reference changed.
-                    group.addWaypoint(wp);
+                    // Re-add to group with lock toggle to ensure it stays in our
+                    // group and not in JourneyMap's "Default" group.
                     currentApi.addWaypoint(GROUP_MOD_ID, wp);
+                    group.setLocked(false);
+                    group.addWaypoint(wp);
+                    group.setLocked(true);
                     Constants.LOG.trace("JM sync: updated waypoint '{}' (guid={})", entryId, guid);
                 }
             }

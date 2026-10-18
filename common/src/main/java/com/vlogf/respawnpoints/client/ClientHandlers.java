@@ -1,5 +1,6 @@
 package com.vlogf.respawnpoints.client;
 
+import com.vlogf.respawnpoints.client.screen.MapChoiceScreen;
 import com.vlogf.respawnpoints.client.screen.RespawnScreenFactory;
 import com.vlogf.respawnpoints.integration.MapIntegrations;
 import com.vlogf.respawnpoints.mixin.DeathScreenAccessor;
@@ -19,6 +20,19 @@ public final class ClientHandlers {
     private static java.util.UUID lastClearedServer;
 
     public static void onHello(ServerHelloPacket packet) {
+        var activeMap = RespawnClientConfig.activeMap();
+        if (activeMap == RespawnClientConfig.ActiveMap.NONE
+                || activeMap == RespawnClientConfig.ActiveMap.DISABLED) {
+            // Карта не выбрана или отключена: не пускаем на сервер,
+            // показываем окно выбора карты и отключаемся.
+            var minecraft = Minecraft.getInstance();
+            minecraft.disconnect();
+            if (minecraft.screen == null
+                    || !(minecraft.screen instanceof MapChoiceScreen)) {
+                minecraft.setScreen(new MapChoiceScreen());
+            }
+            return;
+        }
         com.vlogf.respawnpoints.client.PendingRespawn.clear();
         ClientReadiness.onHello();
         clearTrackingOnServerChange(packet.serverId());

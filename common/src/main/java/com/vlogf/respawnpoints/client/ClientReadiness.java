@@ -1,6 +1,8 @@
 package com.vlogf.respawnpoints.client;
 
 import com.vlogf.respawnpoints.Constants;
+import com.vlogf.respawnpoints.client.RespawnClientConfig;
+import com.vlogf.respawnpoints.client.screen.MapChoiceScreen;
 import com.vlogf.respawnpoints.network.ClientReadyPacket;
 import com.vlogf.respawnpoints.platform.Services;
 import net.minecraft.client.Minecraft;
@@ -26,6 +28,8 @@ public final class ClientReadiness {
     private static boolean waiting;
     private static long waitStartNs;
     private static long lastReadyNs;
+    /** Защита от повторного срабатывания блокировки входа в одиночный мир. */
+    private static boolean singleplayerEntryBlocked;
 
     private ClientReadiness() {
     }
@@ -42,6 +46,7 @@ public final class ClientReadiness {
         readySent = false;
         ticks = 0;
         waiting = false;
+        singleplayerEntryBlocked = false;
         PendingRespawn.clear();
     }
 
@@ -51,11 +56,24 @@ public final class ClientReadiness {
 
     /** Client tick: send readiness once the world (and the chosen map) is up. */
     public static void tick() {
+        var early = Minecraft.getInstance();
+        // Блокируем вход в одиночный мир, если карта не выбрана (NONE или DISABLED).
+        if (early.level != null
+                && (RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE
+                        || RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.DISABLED)
+                && !singleplayerEntryBlocked) {
+            singleplayerEntryBlocked = true;
+            early.disconnect();
+            if (early.screen == null
+                    || !(early.screen instanceof MapChoiceScreen)) {
+                early.setScreen(new MapChoiceScreen());
+            }
+            return;
+        }
         // Stale-arm sweep: a death offer that arrived while the client still
         // looked alive (NeoForge early event) is kept for ARM_GRACE so the
         // DeathScreen can still open; only truly stale arms are dropped.
         // Disarm keeps live marker entries intact.
-        var early = Minecraft.getInstance();
         if (early.player != null && early.player.isAlive() && PendingRespawn.hasPending()) {
             long age = System.nanoTime() - PendingRespawn.setNanos();
             if (age > ARM_GRACE_NS) {

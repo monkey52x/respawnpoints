@@ -24,8 +24,10 @@ public final class RespawnPointsNeoForgeClient {
             // (NONE) — показываем MapChoiceScreen. После любого выбора
             // (в т.ч. "Никакая" или "Отключено") choiceMade() станет true и
             // экран больше не покажется.
-            if (minecraft.level == null && minecraft.screen == null
-                    && RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE
+            if (minecraft.level == null
+                    && !(minecraft.screen instanceof MapChoiceScreen)
+                    && (RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE
+                            || RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.DISABLED)
                     && !MapChoiceScreen.isSessionSuppressed()) {
                 minecraft.setScreen(new MapChoiceScreen());
             }
