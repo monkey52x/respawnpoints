@@ -39,10 +39,10 @@ public final class PendingRespawn {
         emptyOffer = false;
     }
 
-    /** Drop the death-flow arm but keep live marker entries. */
+    /** Drop the death-flow arm but keep live marker entries. emptyOffer не сбрасывается,
+     *  иначе логика быстрого ванильного фолбэка при пустом оффере ломается. */
     public static synchronized void disarm() {
         hasPending = false;
-        emptyOffer = false;
     }
 
     /** Clear the empty-offer flag so a stale one from a previous death

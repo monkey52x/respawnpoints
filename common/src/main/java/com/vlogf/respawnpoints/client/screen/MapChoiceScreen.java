@@ -8,11 +8,11 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * First-launch map selection screen. Shown once when no map manager has been
- * chosen yet and at least one map mod (Xaero or JourneyMap) is installed.
- * All buttons are centered horizontally; the "None" button sits at the
- * bottom centre of the screen. Cannot be closed via Escape — a choice is
- * required.
+ * First-launch map selection screen. Shown once in the main menu when no map
+ * manager has been chosen yet and at least one map mod (Xaero or JourneyMap)
+ * is installed. All buttons are centered horizontally; the "None" button sits
+ * at the bottom centre of the screen. Can be closed via Escape — choosing
+ * "None" is a valid choice and saves NONE to the config.
  */
 public class MapChoiceScreen extends Screen {
     private static final int BUTTON_W = 200;
@@ -64,7 +64,7 @@ public class MapChoiceScreen extends Screen {
 
     @Override
     public boolean shouldCloseOnEsc() {
-        return false;
+        return true;
     }
 
     @Override

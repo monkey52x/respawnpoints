@@ -20,21 +20,25 @@ public final class ClientHandlers {
 
     public static void onHello(ServerHelloPacket packet) {
         com.vlogf.respawnpoints.client.PendingRespawn.clear();
-        MapManagerChoice.onHello(packet.serverId());
         ClientReadiness.onHello();
-        clearXaeroTracking(packet.serverId());
-        MapIntegrations.clearJourneyMapTracking();
+        clearTrackingOnServerChange(packet.serverId());
     }
 
     /**
-     * New server (possibly same address, new world): drop Xaero baselines, ids may
-     * repeat. Reconnects to the SAME server keep baselines (no repeat adopt packets).
+     * New server (possibly same address, new world): drop tracking baselines for
+     * both Xaero and JourneyMap, ids may repeat. Reconnects to the SAME server
+     * keep baselines (no repeat adopt packets, no flickering waypoints).
      */
-    private static void clearXaeroTracking(java.util.UUID serverId) {
+    private static void clearTrackingOnServerChange(java.util.UUID serverId) {
         if (serverId != null && serverId.equals(lastClearedServer)) {
-            return;
+            return; // same server as last time: keep existing tracking
         }
         lastClearedServer = serverId;
+        clearXaeroTracking();
+        clearJourneyMapTracking();
+    }
+
+    private static void clearXaeroTracking() {
         if (!Services.PLATFORM.isModLoaded("xaerominimap")) {
             return;
         }
@@ -44,6 +48,13 @@ public final class ClientHandlers {
         } catch (ReflectiveOperationException | LinkageError e) {
             // Best effort only.
         }
+    }
+
+    private static void clearJourneyMapTracking() {
+        if (!Services.PLATFORM.isModLoaded("journeymap")) {
+            return;
+        }
+        MapIntegrations.clearJourneyMapTracking();
     }
 
     public static void onRespawnList(RespawnListPacket packet) {

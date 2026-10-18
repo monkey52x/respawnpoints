@@ -7,35 +7,36 @@ import com.vlogf.respawnpoints.network.RecolorPointPacket;
 import com.vlogf.respawnpoints.platform.Services;
 import journeymap.api.v2.client.IClientAPI;
 import journeymap.api.v2.client.event.WaypointEvent;
+import journeymap.api.v2.common.event.common.WaypointGroupEvent;
 import journeymap.api.v2.common.waypoint.Waypoint;
 import journeymap.api.v2.common.waypoint.WaypointFactory;
 import journeymap.api.v2.common.waypoint.WaypointGroup;
 import net.minecraft.core.BlockPos;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Syncs respawn options as client-local JourneyMap waypoints in a dedicated
- * group "Respawn Points" so they never mix with the user's "Default" group.
- * Stable linkage via waypoint custom data ({@code respawnpoints:id}).
+ * Syncs respawn options as client-local JourneyMap waypoints in a dedicated,
+ * locked "Respawn Points" group so they never mix with the user's "Default"
+ * group. Stable linkage via waypoint custom data ({@code respawnpoints:id}).
  * <p>
  * ISOLATION: journeymap imports live only in this package. Called reflectively.
  */
 public final class JourneyMapWaypointSync {
     private static final String CUSTOM_KEY = "respawnpoints:id";
     private static final String GROUP_MOD_ID = "respawnpoints";
-    private static final String GROUP_NAME_FALLBACK = "Respawn Points";
+    private static final String GROUP_NAME = "Respawn Points";
 
-    private static WaypointGroup respawnGroup;
-    /** entry.id -> Waypoint, for sweep and event matching. */
-    private static final Map<String, Waypoint> TRACKED_WAYPOINTS = new HashMap<>();
-    /** entry.id -> last server colour (RGB), for detecting map-side recolours. */
-    private static final Map<String, Integer> LAST_COLOR = new HashMap<>();
+    private static volatile WaypointGroup respawnGroup;
+    /** entry.id -> Waypoint, for sweep and event matching. Thread-safe. */
+    private static final Map<String, Waypoint> TRACKED_WAYPOINTS = new ConcurrentHashMap<>();
+    /** entry.id -> last server colour (RGB), for detecting map-side recolours. Thread-safe. */
+    private static final Map<String, Integer> LAST_COLOR = new ConcurrentHashMap<>();
     /** Set while we are mutating waypoints internally, so our own
      *  api.addWaypoint calls do not trigger recolour packets to the server. */
-    private static boolean internalUpdating = false;
+    private static volatile boolean internalUpdating = false;
 
     private JourneyMapWaypointSync() {
     }
@@ -65,34 +66,62 @@ public final class JourneyMapWaypointSync {
         if (entryId == null || !TRACKED_WAYPOINTS.containsKey(entryId)) {
             return;
         }
-        var ctx = event.getContext();
-        if (ctx != null) {
-            String ctxName = ctx.name();
-            switch (ctxName) {
-                case "UPDATE", "UPDATED" -> {
-                    int mapColor = wp.getColor() & 0xFFFFFF;
-                    Integer last = LAST_COLOR.get(entryId);
-                    if (last != null && last != mapColor) {
-                        LAST_COLOR.put(entryId, mapColor);
-                        sendRecolourToServer(entryId, mapColor);
-                    }
-                }
-                case "DELETED", "REMOVED" -> {
-                    // Player deleted our system waypoint in JourneyMap UI: restore it.
-                    internalUpdating = true;
-                    try {
-                        IClientAPI api = RespawnJourneyMapPlugin.api();
-                        if (api != null) {
-                            api.addWaypoint(GROUP_MOD_ID, wp);
-                        }
-                        LAST_COLOR.put(entryId, wp.getColor() & 0xFFFFFF);
-                    } finally {
-                        internalUpdating = false;
-                    }
-                }
-                default -> {
+        switch (event.getContext()) {
+            case UPDATE -> {
+                int mapColor = wp.getColor() & 0xFFFFFF;
+                Integer last = LAST_COLOR.get(entryId);
+                if (last != null && last != mapColor) {
+                    LAST_COLOR.put(entryId, mapColor);
+                    sendRecolourToServer(entryId, mapColor);
                 }
             }
+            case DELETED -> {
+                // Player deleted our system waypoint in JourneyMap UI: restore it
+                // inside the Respawn Points group so it never falls into Default.
+                internalUpdating = true;
+                try {
+                    if (respawnGroup != null) {
+                        respawnGroup.addWaypoint(wp);
+                    }
+                    IClientAPI api = RespawnJourneyMapPlugin.api();
+                    if (api != null) {
+                        api.addWaypoint(GROUP_MOD_ID, wp);
+                    }
+                    LAST_COLOR.put(entryId, wp.getColor() & 0xFFFFFF);
+                } finally {
+                    internalUpdating = false;
+                }
+            }
+            case CREATE, READ -> {
+            }
+        }
+    }
+
+    /** Called by {@link RespawnJourneyMapPlugin} on WAYPOINT_GROUP events. */
+    public static void onWaypointGroupEvent(WaypointGroupEvent event) {
+        if (internalUpdating) {
+            return;
+        }
+        if (event.getContext() != WaypointGroupEvent.Context.DELETED) {
+            return;
+        }
+        WaypointGroup group = event.getGroup();
+        if (group == null || !GROUP_MOD_ID.equals(group.getModId())) {
+            return;
+        }
+        if (!GROUP_NAME.equals(group.getName())) {
+            return;
+        }
+        // Our group was deleted: reset state so the next sync() recreates it
+        // with setLocked(true) and re-adds all tracked waypoints.
+        internalUpdating = true;
+        try {
+            respawnGroup = null;
+            TRACKED_WAYPOINTS.clear();
+            LAST_COLOR.clear();
+            Constants.LOG.debug("JourneyMap group '{}' deleted, will recreate on next sync", group.getName());
+        } finally {
+            internalUpdating = false;
         }
     }
 
@@ -128,8 +157,12 @@ public final class JourneyMapWaypointSync {
             return;
         }
         ensureGroup();
+        WaypointGroup group = respawnGroup;
+        if (group == null) {
+            return;
+        }
 
-        Map<String, RespawnEntry> wanted = new HashMap<>();
+        Map<String, RespawnEntry> wanted = new java.util.HashMap<>();
         for (RespawnEntry entry : entries) {
             if (!entry.concealed()) {
                 wanted.put(entry.id(), entry);
@@ -148,22 +181,23 @@ public final class JourneyMapWaypointSync {
                 int color = entry.color();
 
                 if (wp == null) {
-                    wp = WaypointFactory.createClientWaypoint(GROUP_MOD_ID, pos, name, dim, false);
+                    wp = WaypointFactory.createWaypoint(GROUP_MOD_ID, pos, name, dim, false);
                     wp.setCustomData(CUSTOM_KEY, entryId);
                     wp.setColor(color);
                     wp.setEnabled(true);
-                    respawnGroup.addWaypoint(wp);
+                    group.addWaypoint(wp);
                     api.addWaypoint(GROUP_MOD_ID, wp);
                     TRACKED_WAYPOINTS.put(entryId, wp);
                     Constants.LOG.trace("JM sync: created waypoint '{}' in group '{}'",
-                            entryId, respawnGroup.getName());
+                            entryId, group.getName());
                 } else {
                     wp.setName(name);
                     wp.setBlockPos(pos);
                     wp.setPrimaryDimension(dim);
                     wp.setColor(color);
                     wp.setEnabled(true);
-                    respawnGroup.addWaypoint(wp);
+                    // Re-add to group in case group reference changed.
+                    group.addWaypoint(wp);
                     api.addWaypoint(GROUP_MOD_ID, wp);
                 }
                 LAST_COLOR.put(entryId, color);
@@ -191,19 +225,59 @@ public final class JourneyMapWaypointSync {
     }
 
     private static void ensureGroup() {
-        if (respawnGroup != null) {
-            return;
+        WaypointGroup current = respawnGroup;
+        if (current != null) {
+            // Verify the group still exists (user may have deleted it).
+            IClientAPI api = RespawnJourneyMapPlugin.api();
+            if (api != null) {
+                boolean stillExists = false;
+                try {
+                    for (WaypointGroup g : api.getWaypointGroups(GROUP_MOD_ID)) {
+                        if (g.getGuid().equals(current.getGuid())) {
+                            stillExists = true;
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    Constants.LOG.debug("Could not verify JourneyMap group existence", e);
+                }
+                if (stillExists) {
+                    // Re-apply lock in case the user removed it via UI.
+                    try {
+                        current.setLocked(true);
+                    } catch (Exception e) {
+                        Constants.LOG.debug("Could not re-apply lock to waypoint group", e);
+                    }
+                    return;
+                }
+            }
+            // Group gone: fall through to recreate.
+            respawnGroup = null;
         }
         IClientAPI api = RespawnJourneyMapPlugin.api();
         if (api == null) {
             return;
         }
         try {
-            respawnGroup = WaypointFactory.createWaypointGroup(GROUP_MOD_ID, GROUP_NAME_FALLBACK);
-            api.addWaypointGroup(respawnGroup);
-            Constants.LOG.trace("JM sync: created waypoint group '{}'", respawnGroup.getName());
+            // Reuse an existing group with the same name if present (avoids
+            // duplicates across reloads/server switches).
+            WaypointGroup existing = api.getWaypointGroupByName(GROUP_MOD_ID, GROUP_NAME);
+            if (existing != null) {
+                respawnGroup = existing;
+                try {
+                    existing.setLocked(true);
+                } catch (Exception e) {
+                    Constants.LOG.debug("Could not re-apply lock to waypoint group", e);
+                }
+                Constants.LOG.trace("JM sync: reused existing waypoint group '{}'", existing.getName());
+            } else {
+                respawnGroup = WaypointFactory.createWaypointGroup(GROUP_MOD_ID, GROUP_NAME);
+                api.addWaypointGroup(respawnGroup);
+                respawnGroup.setLocked(true);
+                Constants.LOG.trace("JM sync: created locked waypoint group '{}'", respawnGroup.getName());
+            }
         } catch (Throwable t) {
-            Constants.LOG.warn("Could not create JourneyMap waypoint group", t);
+            Constants.LOG.warn("Could not create/reuse JourneyMap waypoint group", t);
         }
     }
 

@@ -1,7 +1,6 @@
 package com.vlogf.respawnpoints.client;
 
 import com.vlogf.respawnpoints.Constants;
-import com.vlogf.respawnpoints.integration.MapIntegrations;
 import com.vlogf.respawnpoints.network.ClientReadyPacket;
 import com.vlogf.respawnpoints.platform.Services;
 import net.minecraft.client.Minecraft;
@@ -86,18 +85,7 @@ public final class ClientReadiness {
                 // World not loaded yet: don't burn the tick budget.
                 return;
             }
-            // If at least one map mod is installed but the player has not made
-            // a choice yet, wait: do not send ClientReady with NONE before the
-            // MapChoiceScreen selection is made.
-            boolean anyMap = MapIntegrations.isXaeroPresent() || MapIntegrations.isJourneyMapPresent();
-            if (anyMap && !RespawnClientConfig.choiceMade()) {
-                return;
-            }
             if (ticks++ >= MAX_TICKS) {
-                return;
-            }
-            if (MapManagerChoice.resolve() == RespawnClientConfig.ActiveMap.XAERO
-                    && !MapIntegrations.isXaeroSessionReady()) {
                 return;
             }
             readySent = true;

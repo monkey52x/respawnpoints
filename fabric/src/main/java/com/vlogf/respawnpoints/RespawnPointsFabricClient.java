@@ -3,8 +3,9 @@ package com.vlogf.respawnpoints;
 import com.vlogf.respawnpoints.client.ClientBedActions;
 import com.vlogf.respawnpoints.client.ClientPreconditions;
 import com.vlogf.respawnpoints.client.ClientReadiness;
+import com.vlogf.respawnpoints.client.MapManagerChoice;
 import com.vlogf.respawnpoints.client.RespawnClientConfig;
-import com.vlogf.respawnpoints.client.screen.RespawnConfigScreen;
+import com.vlogf.respawnpoints.client.screen.MapChoiceScreen;
 import com.vlogf.respawnpoints.fabric.FabricNetworkHelper;
 import com.vlogf.respawnpoints.integration.MapIntegrations;
 import com.vlogf.respawnpoints.platform.Services;
@@ -16,24 +17,22 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.world.InteractionResult;
 
 public class RespawnPointsFabricClient implements ClientModInitializer {
-    private static boolean firstLaunchMapChoiceShown = false;
-
     @Override
     public void onInitializeClient() {
         ClientPreconditions.checkMapsInstalled();
+        // Auto-detect: если установлен ровно один карто-мод — выбираем его автоматически.
+        // Если оба — выбор будет предложен в главном меню через MapChoiceScreen.
+        MapManagerChoice.init();
         FabricNetworkHelper.registerClientReceivers();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClientReadiness.tick();
-            // At first launch in the main menu, open the YACL config screen so
-            // the player can choose which map manager to use. No auto-detection.
-            if (!firstLaunchMapChoiceShown
+            // В главном меню (уровень не загружен): если обе карты установлены и
+            // игрок ещё не сделал выбор — показываем MapChoiceScreen. После выбора
+            // (в т.ч. "Никакая") choiceMade() станет true и экран больше не покажется.
+            if (client.level == null && client.screen == null
                     && !RespawnClientConfig.choiceMade()
-                    && (MapIntegrations.isXaeroPresent() || MapIntegrations.isJourneyMapPresent())
-                    && client.level == null) {
-                firstLaunchMapChoiceShown = true;
-                if (Services.PLATFORM.isModLoaded("yet_another_config_lib_v3")) {
-                    client.setScreen(RespawnConfigScreen.create(null));
-                }
+                    && MapIntegrations.isXaeroPresent() && MapIntegrations.isJourneyMapPresent()) {
+                client.setScreen(new MapChoiceScreen());
             }
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
