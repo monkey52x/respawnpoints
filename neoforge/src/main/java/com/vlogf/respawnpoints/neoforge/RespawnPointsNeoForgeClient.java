@@ -21,14 +21,11 @@ public final class RespawnPointsNeoForgeClient {
             ClientReadiness.tick();
             var minecraft = Minecraft.getInstance();
             // В главном меню (уровень не загружен): если выбор карты не сделан
-            // (NONE) — показываем MapChoiceScreen. После любого выбора
-            // (в т.ч. "Никакая" или "Отключено") choiceMade() станет true и
-            // экран больше не покажется.
+            // (NONE) — показываем обязательный MapChoiceScreen. DISABLED —
+            // валидный выбор, экран при нём не показывается.
             if (minecraft.level == null
                     && !(minecraft.screen instanceof MapChoiceScreen)
-                    && (RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE
-                            || RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.DISABLED)
-                    && !MapChoiceScreen.isSessionSuppressed()) {
+                    && RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE) {
                 minecraft.setScreen(new MapChoiceScreen());
             }
         });

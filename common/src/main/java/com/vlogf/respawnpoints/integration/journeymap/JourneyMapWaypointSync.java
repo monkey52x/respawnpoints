@@ -11,6 +11,7 @@ import journeymap.api.v2.common.event.common.WaypointGroupEvent;
 import journeymap.api.v2.common.waypoint.Waypoint;
 import journeymap.api.v2.common.waypoint.WaypointFactory;
 import journeymap.api.v2.common.waypoint.WaypointGroup;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 
 import java.util.ArrayList;
@@ -63,6 +64,14 @@ public final class JourneyMapWaypointSync {
     private static final Map<String, Integer> LAST_COLOR = new ConcurrentHashMap<>();
     /** Death offer entries received before MAPPING_STARTED; synced once ready. */
     private static volatile List<RespawnEntry> pendingSync = null;
+    /**
+     * Last server-authoritative entry list we synced. Survives a stop/start
+     * cycle (e.g. a dimension switch, which fires MAPPING_STOPPED followed by
+     * MAPPING_STARTED without a fresh server packet), so markers can be
+     * restored and the group recreated. Cleared only on a real server/world
+     * change (see {@link #clearTracking()}).
+     */
+    private static volatile List<RespawnEntry> lastEntries = List.of();
 
     private JourneyMapWaypointSync() {
     }
@@ -77,12 +86,15 @@ public final class JourneyMapWaypointSync {
         if (internalUpdating) {
             return;
         }
-        pendingSync = List.copyOf(entries);
+        List<RespawnEntry> copy = List.copyOf(entries);
+        lastEntries = copy;
         if (!mappingStarted || api == null) {
             // JourneyMap not ready yet: sync will run on MAPPING_STARTED.
+            pendingSync = copy;
             return;
         }
-        syncInner(entries);
+        pendingSync = null;
+        syncInner(copy);
     }
 
     /** Called by {@link RespawnJourneyMapPlugin} on MAPPING_STARTED. */
@@ -90,6 +102,9 @@ public final class JourneyMapWaypointSync {
         mappingStarted = true;
         ensureGroup();
         restoreTrackingFromApi();
+        // Members may have been moved to Default while the group was gone
+        // (e.g. deleted by the user, or a stop/start cycle): reclaim them.
+        reconcileTrackedIntoGroup();
         List<RespawnEntry> pending = pendingSync;
         if (pending != null) {
             pendingSync = null;
@@ -97,10 +112,16 @@ public final class JourneyMapWaypointSync {
         }
     }
 
-    /** Called by {@link RespawnJourneyMapPlugin} on MAPPING_STOPPED. */
+    /**
+     * Called by {@link RespawnJourneyMapPlugin} on MAPPING_STOPPED. This also
+     * fires for a simple dimension switch (stop then start), so only the
+     * runtime map bindings are dropped here: {@code lastEntries} is preserved
+     * so markers can be restored on the next MAPPING_STARTED without waiting
+     * for a new server packet.
+     */
     public static void onMappingStopped() {
         mappingStarted = false;
-        clearTracking();
+        clearRuntimeBindings();
     }
 
     /** Called by {@link RespawnJourneyMapPlugin} on WAYPOINT events. */
@@ -178,20 +199,77 @@ public final class JourneyMapWaypointSync {
         if (!GROUP_NAME.equals(group.getName())) {
             return;
         }
-        // Our group was deleted: reset state so the next sync() recreates it
-        // with setLocked(true) and re-adds all tracked waypoints.
+        // Our group was deleted. JourneyMap is mid-deletion here, so do NOT
+        // touch its API synchronously: drop the stale group reference and
+        // recreate/reclaim on the next client task to avoid a
+        // ConcurrentModificationException. Tracking maps are kept so existing
+        // waypoints are re-added (not duplicated).
+        respawnGroup = null;
+        Constants.LOG.debug("JourneyMap group '{}' deleted, recreating", group.getName());
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft != null) {
+            minecraft.execute(JourneyMapWaypointSync::recreateGroupAfterDeletion);
+        } else {
+            recreateGroupAfterDeletion();
+        }
+    }
+
+    /**
+     * Recreates the group after a user deletion and reclaims tracked markers,
+     * even when the entry list is empty (the group must exist regardless).
+     */
+    private static void recreateGroupAfterDeletion() {
+        if (!mappingStarted || api == null) {
+            return;
+        }
+        ensureGroup();
+        List<RespawnEntry> snapshot = lastEntries;
+        if (snapshot.isEmpty()) {
+            return;
+        }
+        syncInner(snapshot);
+    }
+
+    /**
+     * Re-adds every tracked waypoint into {@link #respawnGroup}. Used on
+     * MAPPING_STARTED to recover from a group that was deleted (its waypoints
+     * fall back to JourneyMap's "Default" group) while mapping was stopped.
+     */
+    private static void reconcileTrackedIntoGroup() {
+        IClientAPI currentApi = api;
+        WaypointGroup group = respawnGroup;
+        if (currentApi == null || group == null) {
+            return;
+        }
         internalUpdating = true;
         try {
-            respawnGroup = null;
-            TRACKED_WAYPOINT_GUIDS.clear();
-            LAST_COLOR.clear();
-            Constants.LOG.debug("JourneyMap group '{}' deleted, will recreate on next sync", group.getName());
+            for (Map.Entry<String, String> tracked : TRACKED_WAYPOINT_GUIDS.entrySet()) {
+                String guid = tracked.getValue();
+                if (guid == null) {
+                    continue;
+                }
+                Waypoint wp = currentApi.getWaypoint(GROUP_MOD_ID, guid);
+                if (wp == null) {
+                    continue;
+                }
+                currentApi.addWaypoint(GROUP_MOD_ID, wp);
+                group.setLocked(false);
+                group.addWaypoint(wp);
+                group.setLocked(true);
+            }
+        } catch (Exception e) {
+            Constants.LOG.debug("Could not reconcile JourneyMap waypoints into group", e);
         } finally {
             internalUpdating = false;
         }
     }
 
-    /** Remove all our waypoints from JourneyMap and reset state. */
+    /**
+     * Remove all our waypoints from JourneyMap and reset state. Called on a
+     * real server/world change: this is the only place that also drops
+     * {@link #lastEntries}, so points from the previous world can never leak
+     * into the new one on the next mapping start.
+     */
     public static void clearTracking() {
         internalUpdating = true;
         try {
@@ -205,11 +283,22 @@ public final class JourneyMapWaypointSync {
             }
             TRACKED_WAYPOINT_GUIDS.clear();
             LAST_COLOR.clear();
+            lastEntries = List.of();
             // Не сбрасываем respawnGroup: группа должна остаться, чтобы при
             // повторном входе в мир не требовалось перезаходить для её воссоздания.
         } finally {
             internalUpdating = false;
         }
+    }
+
+    /**
+     * Drops only the runtime map bindings (entryId &rarr; GUID and last colour).
+     * Used on MAPPING_STOPPED, which also happens for a dimension switch:
+     * {@link #lastEntries} and the group object are intentionally kept.
+     */
+    private static void clearRuntimeBindings() {
+        TRACKED_WAYPOINT_GUIDS.clear();
+        LAST_COLOR.clear();
     }
 
     /* ------------------------------------------------------------------ */

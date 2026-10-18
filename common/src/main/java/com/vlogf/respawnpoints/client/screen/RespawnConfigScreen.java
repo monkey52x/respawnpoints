@@ -63,6 +63,18 @@ public final class RespawnConfigScreen {
         return builder.build().generateScreen(parent);
     }
 
+    /**
+     * YACL binding getter: {@code NONE} means "not chosen yet" and is not a
+     * selectable value, so present it as DISABLED (the safe default) to avoid a
+     * cycling controller showing an entry that is not in its value list.
+     */
+    private static RespawnClientConfig.ActiveMap currentMapChoice() {
+        RespawnClientConfig.ActiveMap map = RespawnClientConfig.activeMap();
+        return map == RespawnClientConfig.ActiveMap.NONE
+                ? RespawnClientConfig.ActiveMap.DISABLED
+                : map;
+    }
+
     /** Map-manager choice UI (Xaero and JourneyMap). */
     private static ConfigCategory mapCategory() {
         return ConfigCategory.createBuilder()
@@ -71,11 +83,14 @@ public final class RespawnConfigScreen {
                         .name(Component.translatable("respawnpoints.config.map_choice"))
                         .description(OptionDescription.of(Component.translatable(
                                 "respawnpoints.config.map_choice_desc")))
-                        .binding(RespawnClientConfig.ActiveMap.NONE,
-                                RespawnClientConfig::activeMap,
+                        .binding(RespawnClientConfig.ActiveMap.DISABLED,
+                                RespawnConfigScreen::currentMapChoice,
                                 RespawnClientConfig::setChoice)
                         .controller(opt -> CyclingListControllerBuilder.create(opt)
-                                .values(List.of(RespawnClientConfig.ActiveMap.values()))
+                                .values(List.of(
+                                        RespawnClientConfig.ActiveMap.XAERO,
+                                        RespawnClientConfig.ActiveMap.JOURNEYMAP,
+                                        RespawnClientConfig.ActiveMap.DISABLED))
                                 .formatValue(value -> Component.translatable(
                                         "respawnpoints.config.map_"
                                                 + value.name().toLowerCase())))

@@ -57,10 +57,10 @@ public final class ClientReadiness {
     /** Client tick: send readiness once the world (and the chosen map) is up. */
     public static void tick() {
         var early = Minecraft.getInstance();
-        // Блокируем вход в одиночный мир, если карта не выбрана (NONE или DISABLED).
+        // Блокируем вход в одиночный мир, если карта не выбрана (NONE).
+        // DISABLED — валидный выбор (встроенное меню), вход разрешён.
         if (early.level != null
-                && (RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE
-                        || RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.DISABLED)
+                && RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE
                 && !singleplayerEntryBlocked) {
             singleplayerEntryBlocked = true;
             early.disconnect();

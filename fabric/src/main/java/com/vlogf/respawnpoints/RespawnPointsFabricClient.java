@@ -23,14 +23,11 @@ public class RespawnPointsFabricClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClientReadiness.tick();
             // В главном меню (уровень не загружен): если выбор карты не сделан
-            // (NONE) — показываем MapChoiceScreen. После любого выбора
-            // (в т.ч. "Никакая" или "Отключено") choiceMade() станет true и
-            // экран больше не покажется.
+            // (NONE) — показываем обязательный MapChoiceScreen. DISABLED —
+            // валидный выбор, экран при нём не показывается.
             if (client.level == null
                     && !(client.screen instanceof MapChoiceScreen)
-                    && (RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE
-                            || RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.DISABLED)
-                    && !MapChoiceScreen.isSessionSuppressed()) {
+                    && RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE) {
                 client.setScreen(new MapChoiceScreen());
             }
         });
