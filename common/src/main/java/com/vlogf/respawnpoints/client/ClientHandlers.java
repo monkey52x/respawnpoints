@@ -51,6 +51,9 @@ public final class ClientHandlers {
     }
 
     private static void clearJourneyMapTracking() {
+        if (MapManagerChoice.resolve() != RespawnClientConfig.ActiveMap.JOURNEYMAP) {
+            return;
+        }
         if (!Services.PLATFORM.isModLoaded("journeymap")) {
             return;
         }

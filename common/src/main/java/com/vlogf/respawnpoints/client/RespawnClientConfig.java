@@ -15,15 +15,14 @@ public final class RespawnClientConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public enum ActiveMap {
-        AUTO,
+        NONE,
         XAERO,
         JOURNEYMAP,
-        NONE
+        DISABLED
     }
 
-    private static ActiveMap activeMap = ActiveMap.AUTO;
+    private static ActiveMap activeMap = ActiveMap.NONE;
     private static boolean choiceMade = false;
-    private static final java.util.Map<String, ActiveMap> serverChoices = new java.util.HashMap<>();
     /** Show the selected point's name on the map (per-frame highlight). */
     private static boolean showSelectedName = false;
     /** Keep a black "respawning" overlay after Confirm instead of closing at once. */
@@ -54,7 +53,7 @@ public final class RespawnClientConfig {
                     try {
                         activeMap = ActiveMap.valueOf(json.get("activeMap").getAsString().toUpperCase());
                     } catch (IllegalArgumentException ignored) {
-                        activeMap = ActiveMap.AUTO;
+                        activeMap = ActiveMap.NONE;
                     }
                 }
                 if (json.has("choiceMade")) {
@@ -66,16 +65,7 @@ public final class RespawnClientConfig {
                 if (json.has("loadingOverlay")) {
                     loadingOverlay = json.get("loadingOverlay").getAsBoolean();
                 }
-                if (json.has("servers") && json.get("servers").isJsonObject()) {
-                    var servers = json.getAsJsonObject("servers");
-                    for (var key : servers.keySet()) {
-                        try {
-                            serverChoices.put(key,
-                                    ActiveMap.valueOf(servers.get(key).getAsString().toUpperCase()));
-                        } catch (IllegalArgumentException ignored) {
-                        }
-                    }
-                }
+
             }
         } catch (Exception e) {
             Constants.LOG.warn("Could not read respawnpoints-client.json, using defaults", e);
@@ -88,11 +78,7 @@ public final class RespawnClientConfig {
         json.addProperty("choiceMade", choiceMade);
         json.addProperty("showSelectedName", showSelectedName);
         json.addProperty("loadingOverlay", loadingOverlay);
-        JsonObject servers = new JsonObject();
-        for (var e : serverChoices.entrySet()) {
-            servers.addProperty(e.getKey(), e.getValue().name().toLowerCase());
-        }
-        json.add("servers", servers);
+
         try {
             file().getParentFile().mkdirs();
             try (FileWriter writer = new FileWriter(file())) {
@@ -139,38 +125,4 @@ public final class RespawnClientConfig {
         save();
     }
 
-    /** Per-server choice, keyed by server uuid string. Null = no choice stored. */
-    public static synchronized ActiveMap choiceFor(java.util.UUID serverId) {
-        load();
-        return serverChoices.get(serverId.toString());
-    }
-
-    public static synchronized boolean hasChoiceFor(java.util.UUID serverId) {
-        load();
-        return serverChoices.containsKey(serverId.toString());
-    }
-
-    public static synchronized void setChoiceFor(java.util.UUID serverId, ActiveMap map) {
-        serverChoices.put(serverId.toString(), map);
-        save();
-    }
-
-    /** Resolve AUTO to a concrete map given what is installed. */
-    public static ActiveMap resolve(boolean xaeroPresent, boolean journeyMapPresent) {
-        ActiveMap configured = activeMap();
-        return switch (configured) {
-            case XAERO -> xaeroPresent ? ActiveMap.XAERO : ActiveMap.NONE;
-            case JOURNEYMAP -> journeyMapPresent ? ActiveMap.JOURNEYMAP : ActiveMap.NONE;
-            case NONE -> ActiveMap.NONE;
-            case AUTO -> {
-                if (xaeroPresent) {
-                    yield ActiveMap.XAERO;
-                }
-                if (journeyMapPresent) {
-                    yield ActiveMap.JOURNEYMAP;
-                }
-                yield ActiveMap.NONE;
-            }
-        };
-    }
 }

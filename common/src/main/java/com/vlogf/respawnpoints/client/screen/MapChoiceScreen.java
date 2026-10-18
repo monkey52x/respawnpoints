@@ -8,16 +8,20 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * First-launch map selection screen. Shown once in the main menu when no map
- * manager has been chosen yet and at least one map mod (Xaero or JourneyMap)
- * is installed. All buttons are centered horizontally; the "None" button sits
- * at the bottom centre of the screen. Can be closed via Escape — choosing
- * "None" is a valid choice and saves NONE to the config.
+ * First-launch map selection screen. Shown in the main menu when the map
+ * manager is {@link RespawnClientConfig.ActiveMap#NONE}. All buttons are
+ * centered horizontally; the "None" and "Disabled" buttons sit at the
+ * bottom centre of the screen. Can be closed via Escape — choosing "None"
+ * keeps NONE in the config and only suppresses the prompt for the current
+ * client session.
  */
 public class MapChoiceScreen extends Screen {
     private static final int BUTTON_W = 200;
     private static final int BUTTON_H = 20;
     private static final int BUTTON_GAP = 6;
+
+    /** Suppresses re-showing the prompt for the current client session. */
+    private static boolean sessionSuppressed = false;
 
     public MapChoiceScreen() {
         super(Component.translatable("respawnpoints.mapchoice.title"));
@@ -48,23 +52,40 @@ public class MapChoiceScreen extends Screen {
             y += BUTTON_H + BUTTON_GAP;
         }
 
-        // "None" button at the bottom centre.
-        int noneY = height - 50;
+        // "None" button — keeps NONE in config, suppresses prompt this session.
         addRenderableWidget(Button.builder(
                         Component.translatable("respawnpoints.mapchoice.none"),
                         b -> choose(RespawnClientConfig.ActiveMap.NONE))
-                .bounds(cx, noneY, BUTTON_W, BUTTON_H)
+                .bounds(cx, y, BUTTON_W, BUTTON_H)
+                .build());
+        y += BUTTON_H + BUTTON_GAP;
+
+        // "Disabled" button — built-in mod menu without maps, saves DISABLED.
+        addRenderableWidget(Button.builder(
+                        Component.translatable("respawnpoints.mapchoice.disabled"),
+                        b -> choose(RespawnClientConfig.ActiveMap.DISABLED))
+                .bounds(cx, y, BUTTON_W, BUTTON_H)
                 .build());
     }
 
     private void choose(RespawnClientConfig.ActiveMap map) {
         RespawnClientConfig.setChoice(map);
+        if (map == RespawnClientConfig.ActiveMap.NONE) {
+            sessionSuppressed = true;
+        }
         minecraft.setScreen(null);
     }
 
     @Override
     public boolean shouldCloseOnEsc() {
         return true;
+    }
+
+    @Override
+    public void onClose() {
+        // Escape close: keep NONE in config, just suppress re-showing this session.
+        sessionSuppressed = true;
+        super.onClose();
     }
 
     @Override
@@ -80,8 +101,20 @@ public class MapChoiceScreen extends Screen {
     /** Open the map choice screen if no choice has been made yet. */
     public static void promptIfNeeded() {
         var minecraft = net.minecraft.client.Minecraft.getInstance();
-        if (!RespawnClientConfig.choiceMade() && minecraft.screen == null) {
+        if (!sessionSuppressed
+                && !RespawnClientConfig.choiceMade()
+                && minecraft.screen == null) {
             minecraft.setScreen(new MapChoiceScreen());
         }
+    }
+
+    /** Suppress the prompt for the rest of this client session (Esc close). */
+    public static void suppressSession() {
+        sessionSuppressed = true;
+    }
+
+    /** True if the prompt was suppressed for this client session. */
+    public static boolean isSessionSuppressed() {
+        return sessionSuppressed;
     }
 }

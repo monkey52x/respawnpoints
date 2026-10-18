@@ -7,7 +7,6 @@ import com.vlogf.respawnpoints.client.MapManagerChoice;
 import com.vlogf.respawnpoints.client.RespawnClientConfig;
 import com.vlogf.respawnpoints.client.screen.MapChoiceScreen;
 import com.vlogf.respawnpoints.fabric.FabricNetworkHelper;
-import com.vlogf.respawnpoints.integration.MapIntegrations;
 import com.vlogf.respawnpoints.platform.Services;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -20,18 +19,16 @@ public class RespawnPointsFabricClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientPreconditions.checkMapsInstalled();
-        // Auto-detect: если установлен ровно один карто-мод — выбираем его автоматически.
-        // Если оба — выбор будет предложен в главном меню через MapChoiceScreen.
-        MapManagerChoice.init();
         FabricNetworkHelper.registerClientReceivers();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClientReadiness.tick();
-            // В главном меню (уровень не загружен): если обе карты установлены и
-            // игрок ещё не сделал выбор — показываем MapChoiceScreen. После выбора
-            // (в т.ч. "Никакая") choiceMade() станет true и экран больше не покажется.
+            // В главном меню (уровень не загружен): если выбор карты не сделан
+            // (NONE) — показываем MapChoiceScreen. После любого выбора
+            // (в т.ч. "Никакая" или "Отключено") choiceMade() станет true и
+            // экран больше не покажется.
             if (client.level == null && client.screen == null
-                    && !RespawnClientConfig.choiceMade()
-                    && MapIntegrations.isXaeroPresent() && MapIntegrations.isJourneyMapPresent()) {
+                    && RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE
+                    && !MapChoiceScreen.isSessionSuppressed()) {
                 client.setScreen(new MapChoiceScreen());
             }
         });

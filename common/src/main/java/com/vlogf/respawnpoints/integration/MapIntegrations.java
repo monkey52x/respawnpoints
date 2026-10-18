@@ -35,7 +35,8 @@ public final class MapIntegrations {
         return Services.PLATFORM.isModLoaded("journeymap");
     }
 
-    /** Client side only: mirror the offered respawn points in the chosen manager. */
+    /** Client side only: mirror the offered respawn points in the chosen manager.
+     *  NONE and DISABLED mean no map sync at all. */
     public static void syncClientWaypoints(List<RespawnEntry> entries) {
         RespawnClientConfig.ActiveMap map = MapManagerChoice.resolve();
         if (map == RespawnClientConfig.ActiveMap.XAERO && isXaeroPresent()) {

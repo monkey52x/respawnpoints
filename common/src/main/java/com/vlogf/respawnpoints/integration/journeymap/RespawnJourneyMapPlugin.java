@@ -16,14 +16,12 @@ import journeymap.api.v2.common.event.ClientEventRegistry;
  */
 @JourneyMapPlugin(apiVersion = "2.0.0")
 public class RespawnJourneyMapPlugin implements IClientPlugin {
-    private static volatile IClientAPI api;
-
     public RespawnJourneyMapPlugin() {
     }
 
     @Override
     public void initialize(IClientAPI jmClientApi) {
-        api = jmClientApi;
+        JourneyMapWaypointSync.setApi(jmClientApi);
         // Subscribe to waypoint events (colour changes, deletions) and mapping
         // lifecycle events (MAPPING_STARTED / MAPPING_STOPPED).
         ClientEventRegistry.WAYPOINT_EVENT.subscribe(getModId(), event ->
@@ -41,9 +39,5 @@ public class RespawnJourneyMapPlugin implements IClientPlugin {
     @Override
     public String getModId() {
         return "respawnpoints";
-    }
-
-    static IClientAPI api() {
-        return api;
     }
 }

@@ -29,8 +29,12 @@ public final class RespawnConfigScreen {
         var minecraft = Minecraft.getInstance();
         var builder = YetAnotherConfigLib.createBuilder()
                 .title(Component.translatable("respawnpoints.config.title"))
-                .category(lookCategory())
-                .category(mapCategory());
+                .category(lookCategory());
+        // Map-manager choice is only visible in the main menu, not in a
+        // singleplayer world or on a remote server.
+        if (minecraft.level == null) {
+            builder.category(mapCategory());
+        }
         // Map-manager choice is parked with JourneyMap support (Xaero-only for now).
         // Host settings live in the client's config dir and never touch a
         // foreign server: show them in singleplayer and in the main menu
@@ -67,7 +71,7 @@ public final class RespawnConfigScreen {
                         .name(Component.translatable("respawnpoints.config.map_choice"))
                         .description(OptionDescription.of(Component.translatable(
                                 "respawnpoints.config.map_choice_desc")))
-                        .binding(RespawnClientConfig.ActiveMap.AUTO,
+                        .binding(RespawnClientConfig.ActiveMap.NONE,
                                 RespawnClientConfig::activeMap,
                                 RespawnClientConfig::setChoice)
                         .controller(opt -> CyclingListControllerBuilder.create(opt)
