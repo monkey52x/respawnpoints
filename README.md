@@ -2,8 +2,11 @@
 
 <div align="center" dir="auto">
   <a href="https://modrinth.com/project/respawnpoints" rel="nofollow">
-    <img alt="Download on Modrinth" src="https://img.shields.io/modrinth/v/respawnpoints?label=Modrinth&color=00AF5C&logo=modrinth" style="max-width: 100%;">
-  </a>
+  <img alt="Download on Modrinth" src="https://img.shields.io/modrinth/v/respawnpoints?label=Modrinth&color=00AF5C&logo=modrinth" style="max-width: 100%;">
+</a>
+<a href="https://www.curseforge.com/minecraft/mc-mods/respawn-points" rel="nofollow">
+  <img alt="Download on CurseForge" src="https://img.shields.io/badge/CurseForge-Available-F16436?logo=curseforge&logoColor=white" style="max-width: 100%;">
+</a>
 </div>
 
 Pick where you wake up. On death, the vanilla screen becomes a point-selection screen: World Spawn, your beds, charged anchors, admin warps, or a random near-death spot. Server-validated, vanilla respawn logic.
