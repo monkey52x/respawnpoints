@@ -2,6 +2,7 @@ package com.vlogf.respawnpoints.integration.xaero;
 
 import com.vlogf.respawnpoints.Constants;
 import com.vlogf.respawnpoints.client.EntryNames;
+import com.vlogf.respawnpoints.client.screen.DeleteArm;
 import com.vlogf.respawnpoints.client.screen.EntriesDiff;
 import com.vlogf.respawnpoints.client.PendingRespawn;
 import com.vlogf.respawnpoints.client.screen.ScreenTexts;
@@ -72,7 +73,7 @@ public class XaeroRespawnScreen extends GuiMap
     private double scrollAmount;
     private boolean respawning;
     /** Two-step delete: first click arms, second click confirms. */
-    private String armedDeleteId;
+    private final DeleteArm deleteArm = DeleteArm.create();
     /** Death-offer generation this screen was built for (unfreezes on a newer one). */
     private long offerId;
     /** Forced while open: the map must render the VIEWED dimension's markers. */
@@ -124,7 +125,7 @@ public class XaeroRespawnScreen extends GuiMap
     public void respawnpoints$resetForNewOffer() {
         offerId = com.vlogf.respawnpoints.client.PendingRespawn.offerId();
         respawning = false;
-        armedDeleteId = null;
+        deleteArm.clear();
     }
 
     private static int sortKey(RespawnEntry entry, BlockPos deathPos) {
@@ -238,9 +239,7 @@ public class XaeroRespawnScreen extends GuiMap
         int idx = EntriesDiff.indexOfId(sortedEntries, keepId);
         selectedIdx = idx >= 0 ? idx
                 : Math.max(0, Math.min(selectedIdx, sortedEntries.size() - 1));
-        if (armedDeleteId != null && EntriesDiff.indexOfId(sortedEntries, armedDeleteId) < 0) {
-            armedDeleteId = null;
-        }
+        deleteArm.clearIfGone(sortedEntries);
         return true;
     }
 
@@ -278,7 +277,7 @@ public class XaeroRespawnScreen extends GuiMap
             sortedEntries.clear();
             dimOptions.clear();
             selectedIdx = -1;
-            armedDeleteId = null;
+            deleteArm.clear();
             pendingFocus = null;
             switchingTo = null;
             switchRetryCooldown = 0;
@@ -332,9 +331,7 @@ public class XaeroRespawnScreen extends GuiMap
         } else {
             selectedIdx = -1;
         }
-        if (armedDeleteId != null && EntriesDiff.indexOfId(sortedEntries, armedDeleteId) < 0) {
-            armedDeleteId = null;
-        }
+        deleteArm.clearIfGone(sortedEntries);
         int maxScroll = Math.max(0, sortedEntries.size() * CARD_H - (height - 80));
         scrollAmount = Math.max(0.0, Math.min(scrollAmount, maxScroll));
         if (dimsChanged) {
@@ -867,7 +864,7 @@ public class XaeroRespawnScreen extends GuiMap
             graphics.drawString(font, subLine, itemX + 10, itemY + 19,
                     ScreenUtils.isDepleted(entry) ? 0xFF5555 : 0x9FC5FF);
             if (ScreenUtils.isManageable(entry)) {
-                boolean armed = entry.id().equals(armedDeleteId);
+                boolean armed = entry.id().equals(deleteArm.armedId());
                 graphics.drawString(font, armed ? "?" : "✕", itemX + itemW - 16, itemY + 8,
                         armed ? 0xFFFF55 : 0xFF6666);
             }
@@ -1033,8 +1030,7 @@ public class XaeroRespawnScreen extends GuiMap
                     }
                     if (ScreenUtils.isManageable(entry)
                             && mouseX >= itemX + itemW - 18 && mouseX <= itemX + itemW - 1) {
-                        if (entry.id().equals(armedDeleteId)) {
-                            armedDeleteId = null;
+                        if (deleteArm.click(entry.id())) {
                             Services.NETWORK.sendToServer(new DeletePointPacket(entry.id()));
                             if (sortedEntries.size() <= 1) {
                                 // That was the last point: back to vanilla at
@@ -1043,14 +1039,12 @@ public class XaeroRespawnScreen extends GuiMap
                                 return true;
                             }
                         } else {
-                            armedDeleteId = entry.id();
+                            // Armed - will show "?" on next render
                         }
                         clickSound();
                         return true;
                     }
-                    if (armedDeleteId != null) {
-                        armedDeleteId = null;
-                    }
+                    deleteArm.onSelectedOther(entry.id());
                     selectedIdx = i;
                     // Camera target is the clicked entry itself; concealed entries
                     // (near-death) resolve to the player's position.

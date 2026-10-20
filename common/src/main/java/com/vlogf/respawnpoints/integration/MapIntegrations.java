@@ -40,11 +40,7 @@ public final class MapIntegrations {
     public static void syncClientWaypoints(List<RespawnEntry> entries) {
         RespawnClientConfig.ActiveMap map = MapManagerChoice.resolve();
         if (map == RespawnClientConfig.ActiveMap.XAERO && isXaeroPresent()) {
-            // Waypoint sync itself needs the minimap mod; the worldmap alone
-            // only drives the respawn screen.
-            if (Services.PLATFORM.isModLoaded("xaerominimap")) {
-                invoke(XAERO_SYNC, entries);
-            }
+            invoke(XAERO_SYNC, entries);
         } else if (map == RespawnClientConfig.ActiveMap.JOURNEYMAP
                 && isJourneyMapPresent()) {
             invoke(JOURNEYMAP_SYNC, entries);
@@ -55,13 +51,14 @@ public final class MapIntegrations {
     public static void clearJourneyMapTracking() {
         try {
             Class<?> sync = Class.forName("com.vlogf.respawnpoints.integration.journeymap.JourneyMapWaypointSync");
-            sync.getMethod("clearTracking").invoke(null);
+            sync.getMethod("clearAll").invoke(null);
         } catch (ReflectiveOperationException | LinkageError e) {
             // Best effort only.
         }
     }
 
-    /** Reflective Xaero session check (common code must not import xaero APIs). */    public static boolean isXaeroSessionReady() {
+    /** Reflective Xaero session check (common code must not import xaero APIs). */
+    public static boolean isXaeroSessionReady() {
         try {
             Class<?> sessionClass = Class.forName("xaero.common.XaeroMinimapSession");
             Object session = sessionClass.getDeclaredMethod("getCurrentSession").invoke(null);

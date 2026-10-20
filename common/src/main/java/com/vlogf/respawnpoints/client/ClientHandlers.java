@@ -5,7 +5,6 @@ import com.vlogf.respawnpoints.integration.MapIntegrations;
 import com.vlogf.respawnpoints.mixin.DeathScreenAccessor;
 import com.vlogf.respawnpoints.model.RespawnEntry;
 import com.vlogf.respawnpoints.network.RespawnListPacket;
-import com.vlogf.respawnpoints.network.ServerHelloPacket;
 import com.vlogf.respawnpoints.platform.Services;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.DeathScreen;
@@ -16,56 +15,18 @@ public final class ClientHandlers {
     private ClientHandlers() {
     }
 
-    private static java.util.UUID lastClearedServer;
-
-    public static void onHello(ServerHelloPacket packet) {
+    public static void onHello() {
         var activeMap = RespawnClientConfig.activeMap();
         if (activeMap == RespawnClientConfig.ActiveMap.NONE) {
-            // Карта не выбрана: не пускаем на сервер/в мир, отключаемся.
-            // Экран выбора обязателен и появится сам в главном меню
-            // (тик-хук видит NONE при level == null). DISABLED вход разрешает.
+            // Map not chosen: don't let player into server/world, disconnect.
+            // Map choice screen is mandatory and will appear in main menu
+            // (tick hook sees NONE when level == null). DISABLED entry is allowed.
             Minecraft.getInstance().disconnect();
             return;
         }
         com.vlogf.respawnpoints.client.PendingRespawn.clear();
         ClientReadiness.onHello();
-        clearTrackingOnServerChange(packet.serverId());
-    }
-
-    /**
-     * New server (possibly same address, new world): drop tracking baselines for
-     * both Xaero and JourneyMap, ids may repeat. Reconnects to the SAME server
-     * keep baselines (no repeat adopt packets, no flickering waypoints).
-     */
-    private static void clearTrackingOnServerChange(java.util.UUID serverId) {
-        if (serverId != null && serverId.equals(lastClearedServer)) {
-            return; // same server as last time: keep existing tracking
-        }
-        lastClearedServer = serverId;
-        clearXaeroTracking();
-        clearJourneyMapTracking();
-    }
-
-    private static void clearXaeroTracking() {
-        if (!Services.PLATFORM.isModLoaded("xaerominimap")) {
-            return;
-        }
-        try {
-            Class<?> sync = Class.forName("com.vlogf.respawnpoints.integration.xaero.XaeroWaypointSync");
-            sync.getMethod("clearTracking").invoke(null);
-        } catch (ReflectiveOperationException | LinkageError e) {
-            // Best effort only.
-        }
-    }
-
-    private static void clearJourneyMapTracking() {
-        if (MapManagerChoice.resolve() != RespawnClientConfig.ActiveMap.JOURNEYMAP) {
-            return;
-        }
-        if (!Services.PLATFORM.isModLoaded("journeymap")) {
-            return;
-        }
-        MapIntegrations.clearJourneyMapTracking();
+        // Server change detection is now handled in ClientReadiness.tick()
     }
 
     public static void onRespawnList(RespawnListPacket packet) {

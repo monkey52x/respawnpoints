@@ -7,19 +7,22 @@ import com.vlogf.respawnpoints.network.SelectRespawnPacket;
 import com.vlogf.respawnpoints.util.Limits;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /** Server-side handling of the client's respawn packets. */
 public final class ServerHandlers {
     private ServerHandlers() {
     }
 
-    private static final java.util.Map<java.util.UUID, Long> LAST_SELECT = new java.util.concurrent.ConcurrentHashMap<>();
     // Per-action buckets (not one shared MUTATE map): a single Save click may
     // legitimately send Rename immediately followed by a sync-triggered Recolor,
     // and the second packet must not eat the other's budget.
-    private static final java.util.Map<java.util.UUID, Long> LAST_RENAME = new java.util.concurrent.ConcurrentHashMap<>();
-    private static final java.util.Map<java.util.UUID, Long> LAST_RECOLOR = new java.util.concurrent.ConcurrentHashMap<>();
-    private static final java.util.Map<java.util.UUID, Long> LAST_DELETE = new java.util.concurrent.ConcurrentHashMap<>();
-    private static final java.util.Map<java.util.UUID, Long> LAST_READY = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<java.util.UUID, Long> LAST_SELECT = new ConcurrentHashMap<>();
+    private static final Map<java.util.UUID, Long> LAST_RENAME = new ConcurrentHashMap<>();
+    private static final Map<java.util.UUID, Long> LAST_RECOLOR = new ConcurrentHashMap<>();
+    private static final Map<java.util.UUID, Long> LAST_DELETE = new ConcurrentHashMap<>();
+    private static final Map<java.util.UUID, Long> LAST_READY = new ConcurrentHashMap<>();
 
     public static void onSelect(ServerPlayer player, SelectRespawnPacket packet) {
         if (!validId(packet.pointId()) || !rateLimit(LAST_SELECT, player.getUUID())) {
@@ -69,7 +72,7 @@ public final class ServerHandlers {
         return id != null && !id.isEmpty() && id.length() <= Limits.MAX_POINT_ID;
     }
 
-    private static boolean rateLimit(java.util.Map<java.util.UUID, Long> last, java.util.UUID uuid) {
+    private static boolean rateLimit(Map<java.util.UUID, Long> last, java.util.UUID uuid) {
         long now = System.nanoTime();
         Long prev = last.get(uuid);
         if (prev != null && now - prev < Limits.RATE_LIMIT_NS) {

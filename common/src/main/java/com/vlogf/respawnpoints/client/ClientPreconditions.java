@@ -3,9 +3,9 @@ package com.vlogf.respawnpoints.client;
 import com.vlogf.respawnpoints.Constants;
 import com.vlogf.respawnpoints.integration.MapIntegrations;
 
-/** Клиентские предусловия: проверяет наличие карто-модов.
- * Жёсткой зависимости от Xaero больше нет — мод работает с JourneyMap,
- * с Xaero или совсем без карт (standalone-режим). */
+/** Client preconditions: checks if map mods are installed.
+ *  Hard dependency on Xaero removed — mod works with JourneyMap,
+ *  Xaero, or no maps at all (standalone mode). */
 public final class ClientPreconditions {
     private ClientPreconditions() {
     }

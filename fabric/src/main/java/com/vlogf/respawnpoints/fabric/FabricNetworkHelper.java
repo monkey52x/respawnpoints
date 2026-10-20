@@ -7,7 +7,6 @@ import com.vlogf.respawnpoints.network.RecolorPointPacket;
 import com.vlogf.respawnpoints.network.RenamePointPacket;
 import com.vlogf.respawnpoints.network.RespawnListPacket;
 import com.vlogf.respawnpoints.network.SelectRespawnPacket;
-import com.vlogf.respawnpoints.network.ServerHelloPacket;
 import com.vlogf.respawnpoints.platform.services.INetworkHelper;
 import com.vlogf.respawnpoints.server.ServerHandlers;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -19,7 +18,6 @@ import net.minecraft.server.level.ServerPlayer;
 public class FabricNetworkHelper implements INetworkHelper {
     public static void registerPayloads() {
         PayloadTypeRegistry.playS2C().register(RespawnListPacket.TYPE, RespawnListPacket.CODEC);
-        PayloadTypeRegistry.playS2C().register(ServerHelloPacket.TYPE, ServerHelloPacket.CODEC);
         PayloadTypeRegistry.playC2S().register(SelectRespawnPacket.TYPE, SelectRespawnPacket.CODEC);
         PayloadTypeRegistry.playC2S().register(ClientReadyPacket.TYPE, ClientReadyPacket.CODEC);
         PayloadTypeRegistry.playC2S().register(RenamePointPacket.TYPE, RenamePointPacket.CODEC);
@@ -49,9 +47,6 @@ public class FabricNetworkHelper implements INetworkHelper {
         ClientPlayNetworking.registerGlobalReceiver(RespawnListPacket.TYPE,
                 (packet, context) -> context.client().execute(() ->
                         ClientHandlers.onRespawnList(packet)));
-        ClientPlayNetworking.registerGlobalReceiver(ServerHelloPacket.TYPE,
-                (packet, context) -> context.client().execute(() ->
-                        ClientHandlers.onHello(packet)));
     }
 
     @Override

@@ -12,7 +12,6 @@
     "ServerPlayerRespawnAccessor"
   ],
   "client": [
-    "MixinMinecraft",
     "MixinClientPacketListenerRespawn",
     "MixinDeathScreenOpened",
     "DeathScreenAccessor"

@@ -4,7 +4,7 @@ import com.vlogf.respawnpoints.model.RespawnEntry;
 
 import java.util.List;
 
-    /** Client-side state: the respawn options offered by the server for the current death. */
+/** Client-side state: the respawn options offered by the server for the current death. */
 public final class PendingRespawn {
     private static List<RespawnEntry> entries = List.of();
     private static boolean hasPending = false;
@@ -12,8 +12,6 @@ public final class PendingRespawn {
     private static long offerId = 0L;
     /** When the current offer was armed (nanos): guards the alive-tick disarm. */
     private static long setNanos = 0L;
-    /** Last death offer arrived but carried no entries: nothing to choose. */
-    private static boolean emptyOffer = false;
 
     private PendingRespawn() {
     }
@@ -23,7 +21,6 @@ public final class PendingRespawn {
         hasPending = true;
         offerId = id;
         setNanos = System.nanoTime();
-        emptyOffer = list.isEmpty();
     }
 
     /** Live marker sync while alive: refresh the list without arming the death flow. */
@@ -36,32 +33,20 @@ public final class PendingRespawn {
         hasPending = false;
         offerId = 0L;
         setNanos = 0L;
-        emptyOffer = false;
     }
 
-    /** Drop the death-flow arm but keep live marker entries. emptyOffer не сбрасывается,
-     *  иначе логика быстрого ванильного фолбэка при пустом оффере ломается. */
+    /** Drop the death-flow arm but keep live marker entries. */
     public static synchronized void disarm() {
         hasPending = false;
-    }
-
-    /** Clear the empty-offer flag so a stale one from a previous death
-     * can no longer trigger an immediate vanilla fallback. */
-    public static synchronized void clearEmptyOffer() {
-        emptyOffer = false;
     }
 
     public static synchronized boolean hasPending() {
         return hasPending && !entries.isEmpty();
     }
 
-    /**
-     * The last death offer arrived but was empty: the server answered, there
-     * is just nothing to choose. Distinct from "no offer yet" — the client
-     * must fall through to vanilla instead of waiting.
-     */
+    /** True when the last death offer arrived and was empty (server answered, nothing to choose). */
     public static synchronized boolean hasEmptyOffer() {
-        return emptyOffer && offerId != 0L;
+        return offerId != 0L && entries.isEmpty();
     }
 
     public static synchronized long offerId() {
@@ -74,5 +59,12 @@ public final class PendingRespawn {
 
     public static synchronized List<RespawnEntry> entries() {
         return entries;
+    }
+
+    /** Clear the empty-offer state so a stale one from a previous death can no longer trigger vanilla fallback. */
+    public static synchronized void clearEmptyOffer() {
+        if (offerId != 0L && entries.isEmpty()) {
+            offerId = 0L;
+        }
     }
 }

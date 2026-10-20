@@ -14,28 +14,27 @@ Pick where you wake up. On death, the vanilla screen becomes a point-selection s
 ## Requirements
 
 - NeoForge 21.1.x **or** Fabric Loader ≥0.16.14 + Fabric API — for Minecraft 1.21.1
-- [Xaero's World Map](https://modrinth.com/mod/xaeros-world-map) and [Xaero's Minimap](https://modrinth.com/mod/xaeros-minimap) (builds matching your loader)
+- [Xaero's World Map](https://modrinth.com/mod/xaeros-world-map) and [Xaero's Minimap](https://modrinth.com/mod/xaeros-minimap) (builds matching your loader) **or** [JourneyMap](https://modrinth.com/mod/journeymap)
 - Required on both client and server.
-- ❌ Not compatible with [JourneyMap](https://modrinth.com/plugin/journeymap) — the game will refuse to load with it installed.
 - Optional: [YACL](https://modrinth.com/mod/yacl) for the settings screen (plus ModMenu on Fabric).
 
 ## Installation
 
 1. Install NeoForge 21.1.x **or** Fabric Loader (+ Fabric API) for Minecraft 1.21.1.
-2. Install Xaero's World Map and Xaero's Minimap.
+2. Install Xaero's World Map and Xaero's Minimap **or** JourneyMap.
 3. Drop the mod `.jar` for your loader (NeoForge or Fabric build) into the `mods` folder (client **and** server).
 4. (Optional) Install YACL to configure the mod in-game.
 
 ## Features
 
-- **Selection screen on death** — full-map view (Xaero) with a sidebar, or a compact list fallback. Distance, dimensions and anchor charges at a glance.
+- **Selection screen on death** — full-map view (Xaero/JourneyMap) with a sidebar, or a compact list fallback. Distance, dimensions and anchor charges at a glance.
 - **Beds & anchors** — bind by sleeping / charging the anchor. Rename with Shift + Right-click, recolor via the map menu (Save pushes the map-side color to the server), per-player names. Blocklist beds you never want bound (`bed block`).
 - **Admin warps** — server-wide points with teleport, visible to everyone.
 - **Offline player management** — `beds`, `bind` and `unbind` accept nicks/UUIDs of offline players, plus `offline` branches with offline-only Tab-complete. No Mojang lookups: unknown names fail instantly without stalling the server.
 - **Near-death random spot** — optional random revive (off by default): only existing chunks, never generates new ones. Lava and void are always banned; in the ocean you spawn swimming. 5-minute cooldown after use; not offered when nothing suitable is in range.
 - **Frozen confirm** — after confirming, the button turns dark green and the screen waits for vanilla to take over.
 - **Per-point cooldowns** — any entry can carry a cooldown (gray + live timer), manageable via admin commands.
-- **Waypoints** — every point syncs to Xaero's map, both ways for colors.
+- **Waypoints** — every point syncs to Xaero's map or JourneyMap, both ways for colors.
 - **Server-authoritative** — every choice is re-validated on select; broken beds, spent anchors and stale picks fall back cleanly.
 
 <details>
@@ -74,7 +73,7 @@ Admin:
 Debug (admin):
 - `/respawnpoints debug inspect` — click a bed/anchor to inspect it
 
-Config `config/respawnpoints-server.json`: `bedLimit`, `enableNearDeath`, `nearDeathRadius`, `nearDeathMinDistance`, `nearDeathCooldownSec`, `showSpawn`, `showNearDeath` — reload live via `admin reload`, host settings also editable from the main menu (YACL).
+Config `config/respawnpoints-server.json`: `bedLimit`, `enableNearDeath`, `nearDeathRadius`, `nearDeathMinDistance`, `nearDeathCooldownSec`, `nearDeathMaxScansPerTick`, `showSpawn`, `showNearDeath` — reload live via `admin reload`, host settings also editable from the main menu (YACL).
 </details>
 
 ## Inspired by

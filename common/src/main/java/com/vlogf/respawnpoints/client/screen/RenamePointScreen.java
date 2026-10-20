@@ -18,7 +18,7 @@ public class RenamePointScreen extends Screen {
     private EditBox nameField;
     private Button unbindButton;
     /** Two-step unbind: first click arms, second click confirms. */
-    private boolean unbindArmed;
+    private final DeleteArm deleteArm = DeleteArm.create();
 
     public RenamePointScreen(RespawnEntry entry) {
         super(Component.translatable("respawnpoints.rename.title"));
@@ -68,11 +68,8 @@ public class RenamePointScreen extends Screen {
     }
 
     private void unbind() {
-        if (!unbindArmed) {
-            unbindArmed = true;
-            if (unbindButton != null) {
-                unbindButton.setMessage(Component.translatable("respawnpoints.rename.confirm_unbind"));
-            }
+        if (!deleteArm.click(entry.id())) {
+            unbindButton.setMessage(Component.translatable("respawnpoints.rename.confirm_unbind"));
             return;
         }
         Services.NETWORK.sendToServer(new DeletePointPacket(entry.id()));

@@ -175,6 +175,16 @@ public final class RespawnConfigScreen {
                         .controller(opt -> IntegerSliderControllerBuilder.create(opt)
                                 .range(0, 3600).step(60))
                         .build())
+                .option(Option.<Integer>createBuilder()
+                        .name(Component.translatable("respawnpoints.config.neardeath_max_scans"))
+                        .description(OptionDescription.of(Component.translatable(
+                                "respawnpoints.config.neardeath_max_scans_desc")))
+                        .binding(8,
+                                RespawnConfig::getNearDeathMaxScansPerTick,
+                                RespawnConfig::setNearDeathMaxScansPerTick)
+                        .controller(opt -> IntegerSliderControllerBuilder.create(opt)
+                                .range(1, 64).step(1))
+                        .build())
                 .option(Option.<Boolean>createBuilder()
                         .name(Component.translatable("respawnpoints.config.show_spawn"))
                         .description(OptionDescription.createBuilder()

@@ -1,0 +1,7 @@
+chore: cleanup and 1.0.9 prep
+
+- Translate all Russian comments to English
+- Remove ServerHelloPacket, client-side server change detection in tick()
+- Update README.md: JourneyMap support, new config options, removed ServerHelloPacket
+- Update CHANGELOG.md: merge Unreleased into 1.0.9
+- Update ROADMAP.md: add JourneyMap waypoint recreate idea

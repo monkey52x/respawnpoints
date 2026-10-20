@@ -31,7 +31,7 @@ public class RespawnSelectScreen extends Screen implements RespawnListUpdater {
     private Button respawnButton;
     private boolean sent;
     /** Two-step delete: first click arms, second click confirms. */
-    private final RespawnScreenModel.DeleteArm deleteArm = new RespawnScreenModel.DeleteArm();
+    private final DeleteArm deleteArm = DeleteArm.create();
     /** Death-offer generation this screen was built for (unfreezes on a newer one). */
     private long offerId;
     /** Last whole second the cooldown labels were repainted (live timer, no server traffic). */
@@ -79,7 +79,8 @@ public class RespawnSelectScreen extends Screen implements RespawnListUpdater {
         return visible;
     }
 
-    private List<String> dimOptions() {        List<String> dims = new java.util.ArrayList<>();
+    private List<String> dimOptions() {
+        List<String> dims = new java.util.ArrayList<>();
         for (RespawnEntry entry : entries) {
             if (!dims.contains(entry.dimension())) {
                 dims.add(entry.dimension());

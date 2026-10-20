@@ -1,5 +1,6 @@
 package com.vlogf.respawnpoints.server;
 
+import com.vlogf.respawnpoints.Constants;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.StreamTagVisitor;
 import net.minecraft.nbt.TagType;
@@ -19,13 +20,14 @@ import java.util.Map;
  *
  * <p>Server thread only. Callers share one {@link Scan} per search so repeated
  * probes of the same chunk cost nothing after the first touch.
+ *
+ * <p>Disk probes are rate-limited per tick via {@link RespawnConfig#getNearDeathMaxScansPerTick()}
+ * to avoid lag spikes when multiple players die simultaneously.
  */
 public final class ChunkGate {
     private ChunkGate() {
     }
 
-    /** Disk probes per search (each blocks the tick briefly; region headers stay cached). */
-    private static final int MAX_SCANS = 24;
     private static final String FULL_STATUS =
             BuiltInRegistries.CHUNK_STATUS.getKey(ChunkStatus.FULL).toString();
 
@@ -43,7 +45,8 @@ public final class ChunkGate {
             return cached;
         }
         boolean result = false;
-        if (scan.count < MAX_SCANS) {
+        int maxScans = RespawnConfig.getNearDeathMaxScansPerTick();
+        if (scan.count < maxScans) {
             scan.count++;
             result = probeDisk(level, chunkX, chunkZ);
             scan.full.put(key, result);
@@ -63,7 +66,7 @@ public final class ChunkGate {
         if (probe.seenRoot && !probe.full) {
             // Non-full (or unexpected) stage: visible at debug so a Status
             // string drift never fails silently again.
-            com.vlogf.respawnpoints.Constants.LOG.debug(
+            Constants.LOG.debug(
                     "ChunkGate: chunk [{}, {}] stage '{}', need '{}'",
                     chunkX, chunkZ, probe.foundStatus, FULL_STATUS);
         }

@@ -34,6 +34,8 @@ public final class RespawnConfig {
     private static volatile boolean enableNearDeath = false;
     /** Show the random near-death entry (off by default until the system rework). */
     private static volatile boolean showNearDeath = false;
+    /** Max disk chunk scans per server tick for near-death search (prevents lag spikes). */
+    private static volatile int nearDeathMaxScansPerTick = 8;
 
     private RespawnConfig() {
     }
@@ -64,6 +66,10 @@ public final class RespawnConfig {
 
     public static boolean isShowNearDeath() {
         return showNearDeath;
+    }
+
+    public static int getNearDeathMaxScansPerTick() {
+        return nearDeathMaxScansPerTick;
     }
 
     /** Live setters for the in-game config screen (same clamps as load). */
@@ -101,6 +107,10 @@ public final class RespawnConfig {
         showNearDeath = value;
     }
 
+    public static synchronized void setNearDeathMaxScansPerTick(int value) {
+        nearDeathMaxScansPerTick = Math.min(64, Math.max(1, value));
+    }
+
     /** Load (or create with defaults) from the server game directory. */
     public static synchronized void load(Path gameDir) {
         java.io.File file = gameDir.resolve("config").resolve(FILE_NAME).toFile();
@@ -121,8 +131,9 @@ public final class RespawnConfig {
                     showSpawn = clampBool(json, "showSpawn", showSpawn);
                     enableNearDeath = clampBool(json, "enableNearDeath", enableNearDeath);
                     showNearDeath = clampBool(json, "showNearDeath", showNearDeath);
-                    Constants.LOG.info("RespawnPoints config loaded: bedLimit={} nearDeathRadius={} nearDeathMinDistance={} nearDeathCooldownSec={} showSpawn={} enableNearDeath={} showNearDeath={}",
-                            bedLimit, nearDeathRadius, nearDeathMinDistance, nearDeathCooldownSec, showSpawn, enableNearDeath, showNearDeath);
+                    nearDeathMaxScansPerTick = clampInt(json, "nearDeathMaxScansPerTick", nearDeathMaxScansPerTick, 1, 64);
+                    Constants.LOG.info("RespawnPoints config loaded: bedLimit={} nearDeathRadius={} nearDeathMinDistance={} nearDeathCooldownSec={} showSpawn={} enableNearDeath={} showNearDeath={} nearDeathMaxScansPerTick={}",
+                            bedLimit, nearDeathRadius, nearDeathMinDistance, nearDeathCooldownSec, showSpawn, enableNearDeath, showNearDeath, nearDeathMaxScansPerTick);
                     // Backfill newly added keys into old files.
                     save(gameDir);
                     return;
@@ -144,6 +155,7 @@ public final class RespawnConfig {
         json.addProperty("nearDeathCooldownSec", nearDeathCooldownSec);
         json.addProperty("showSpawn", showSpawn);
         json.addProperty("showNearDeath", showNearDeath);
+        json.addProperty("nearDeathMaxScansPerTick", nearDeathMaxScansPerTick);
         try {
             java.io.File file = gameDir.resolve("config").resolve(FILE_NAME).toFile();
             file.getParentFile().mkdirs();
@@ -151,7 +163,7 @@ public final class RespawnConfig {
                     new FileOutputStream(file), StandardCharsets.UTF_8)) {
                 GSON.toJson(json, writer);
             }
-            Constants.LOG.info("RespawnPoints config written with defaults: {}", file);
+            Constants.LOG.info("RespawnPoints config written: {}", file);
         } catch (Exception e) {
             Constants.LOG.warn("Could not save respawnpoints-server.json", e);
         }

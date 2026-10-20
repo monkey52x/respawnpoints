@@ -12,6 +12,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * File-level surgery on offline players' data. Used by admin commands when the
@@ -73,7 +76,8 @@ public final class OfflinePlayerData {
     }
 
     /** Vanilla idiom: .dat first, .dat_old fallback. */
-    private static CompoundTag readPlayerFile(Path file) {        try {
+    private static CompoundTag readPlayerFile(Path file) {
+        try {
             return net.minecraft.nbt.NbtIo.readCompressed(file,
                     net.minecraft.nbt.NbtAccounter.unlimitedHeap());
         } catch (Exception ignored) {
@@ -97,65 +101,88 @@ public final class OfflinePlayerData {
     public record KnownPlayer(UUID uuid, String name) {
     }
 
+    /** Cached username directory: lower-cased nick -> KnownPlayer. */
+    private static final Map<String, CachedCache> USERNAME_CACHE = new ConcurrentHashMap<>();
+
+    private static class CachedCache {
+        final Map<String, KnownPlayer> entries;
+        final long expiresAt; // Millis when cache expires (based on earliest expiry in file)
+
+        CachedCache(Map<String, KnownPlayer> entries, long expiresAt) {
+            this.entries = entries;
+            this.expiresAt = expiresAt;
+        }
+
+        boolean isExpired() {
+            return System.currentTimeMillis() > expiresAt;
+        }
+    }
+
     /**
-     * Nick directory from vanilla's own <code>usercache.json</code> (server dir,
+     * Nick directory from vanilla's own {@code usercache.json} (server dir,
      * game-dir fallback), keyed by lower-cased nick. Expired or unparseable
      * entries are skipped like vanilla skips them — never resolved, never
      * suggested by name (raw UUID still works). Read-only: we never write it.
+     * Cached for 60 seconds to avoid repeated disk reads during tab-complete.
      */
-    public static java.util.Map<String, KnownPlayer> readUsernameCache(MinecraftServer server) {
-        java.util.Map<String, KnownPlayer> out = new java.util.LinkedHashMap<>();
+    public static Map<String, KnownPlayer> readUsernameCache(MinecraftServer server) {
+        long now = System.currentTimeMillis();
+        String key = server.getServerDirectory().toString();
+        CachedCache cached = USERNAME_CACHE.get(key);
+        if (cached != null && !cached.isExpired()) {
+            return cached.entries;
+        }
+
+        Map<String, KnownPlayer> out = new LinkedHashMap<>();
         Path file = server.getServerDirectory().resolve("usercache.json");
         if (!Files.isRegularFile(file)) {
             file = java.nio.file.Paths.get(System.getProperty("user.dir"), "usercache.json");
             if (!Files.isRegularFile(file)) {
+                USERNAME_CACHE.put(key, new CachedCache(out, now + 60_000));
                 return out;
             }
         }
-        long now = System.currentTimeMillis();
+
+        long earliestExpiry = Long.MAX_VALUE;
         try {
             String json = Files.readString(file, StandardCharsets.UTF_8);
             com.google.gson.JsonArray array =
                     new com.google.gson.Gson().fromJson(json, com.google.gson.JsonArray.class);
-            if (array == null) {
-                return out;
-            }
-            java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter
-                    .ofPattern("yyyy-MM-dd HH:mm:ss Z", java.util.Locale.ROOT);
-            for (com.google.gson.JsonElement el : array) {
-                if (!el.isJsonObject()) {
-                    continue;
-                }
-                com.google.gson.JsonObject e = el.getAsJsonObject();
-                if (!e.has("name") || !e.has("uuid")) {
-                    continue;
-                }
-                String name = e.get("name").getAsString();
-                UUID uuid;
-                try {
-                    uuid = UUID.fromString(e.get("uuid").getAsString());
-                } catch (IllegalArgumentException ignored) {
-                    continue;
-                }
-                long expiresAt = Long.MIN_VALUE;
-                if (e.has("expiresOn")) {
+            if (array != null) {
+                java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter
+                        .ofPattern("yyyy-MM-dd HH:mm:ss Z", java.util.Locale.ROOT);
+                for (com.google.gson.JsonElement el : array) {
+                    if (!el.isJsonObject()) continue;
+                    com.google.gson.JsonObject e = el.getAsJsonObject();
+                    if (!e.has("name") || !e.has("uuid")) continue;
+                    String name = e.get("name").getAsString();
+                    UUID uuid;
                     try {
-                        expiresAt = java.time.OffsetDateTime.parse(
-                                e.get("expiresOn").getAsString(), fmt).toInstant().toEpochMilli();
-                    } catch (Exception ignored) {
+                        uuid = UUID.fromString(e.get("uuid").getAsString());
+                    } catch (IllegalArgumentException ignored) {
                         continue;
                     }
+                    long expiresAt = Long.MAX_VALUE;
+                    if (e.has("expiresOn")) {
+                        try {
+                            expiresAt = java.time.OffsetDateTime.parse(
+                                    e.get("expiresOn").getAsString(), fmt).toInstant().toEpochMilli();
+                        } catch (Exception ignored) {
+                            continue;
+                        }
+                    }
+                    if (expiresAt <= now) continue;
+                    earliestExpiry = Math.min(earliestExpiry, expiresAt);
+                    String lcName = name.toLowerCase(java.util.Locale.ROOT);
+                    out.putIfAbsent(lcName, new KnownPlayer(uuid, name));
                 }
-                if (expiresAt <= now) {
-                    continue;
-                }
-                String key = name.toLowerCase(java.util.Locale.ROOT);
-                // First valid entry wins; vanilla keeps nicks unique anyway.
-                out.putIfAbsent(key, new KnownPlayer(uuid, name));
             }
         } catch (Exception e) {
             Constants.LOG.debug("Could not read usernamecache.json", e);
         }
+
+        long cacheExpiry = earliestExpiry != Long.MAX_VALUE ? earliestExpiry : now + 60_000;
+        USERNAME_CACHE.put(key, new CachedCache(out, cacheExpiry));
         return out;
     }
 
@@ -169,13 +196,9 @@ public final class OfflinePlayerData {
         }
         ListTag points = root.getCompound("RespawnPoints").getList("Points", Tag.TAG_COMPOUND);
         for (int i = 0; i < points.size(); i++) {
-            if (!(points.get(i) instanceof CompoundTag e)) {
-                continue;
-            }
+            if (!(points.get(i) instanceof CompoundTag e)) continue;
             String id = e.getString("Id");
-            if (id.isEmpty()) {
-                continue;
-            }
+            if (id.isEmpty()) continue;
             out.add(new PlayerRespawnData.PointSnapshot(
                     id,
                     e.getString("Dim"),
@@ -248,7 +271,7 @@ public final class OfflinePlayerData {
     }
 
     /**
-     * Active cooldowns from an offline player's file (id -&gt; end millis).
+     * Active cooldowns from an offline player's file (id -> end millis).
      * Expired entries are skipped (never resurrected, never reported).
      */
     public static java.util.Map<String, Long> readCooldowns(MinecraftServer server, UUID uuid) {

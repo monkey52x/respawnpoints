@@ -238,10 +238,12 @@ public final class DeathManager {
     /**
      * Rebuild and push the player's list. Dead players get a selectable offer
      * (cached pending); alive players get a marker-only live sync.
-     * Nothing is sent before the client confirmed readiness (pull model).
+     * Initial join sync (alive, not in READY) is allowed once to populate markers immediately.
+     * Nothing else is sent before the client confirmed readiness (pull model).
      */
     public static void pushUpdate(ServerPlayer player) {
-        if (!READY.contains(player.getUUID())) {
+        boolean isInitialSync = !READY.contains(player.getUUID()) && player.isAlive();
+        if (!isInitialSync && !READY.contains(player.getUUID())) {
             return;
         }
         pruneSnapshots(player);
@@ -276,6 +278,9 @@ public final class DeathManager {
         // would otherwise stay stale until their own next push). The second pass
         // sees live == stored, so this terminates after one level.
         fanOutCharges(player, chargesChanged);
+        if (isInitialSync) {
+            READY.add(player.getUUID());
+        }
     }
 
     /** Push charge updates to other bound players once, skipping the dead

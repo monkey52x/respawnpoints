@@ -7,7 +7,6 @@ import com.vlogf.respawnpoints.network.RecolorPointPacket;
 import com.vlogf.respawnpoints.network.RenamePointPacket;
 import com.vlogf.respawnpoints.network.RespawnListPacket;
 import com.vlogf.respawnpoints.network.SelectRespawnPacket;
-import com.vlogf.respawnpoints.network.ServerHelloPacket;
 import com.vlogf.respawnpoints.platform.services.INetworkHelper;
 import com.vlogf.respawnpoints.server.ServerHandlers;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -23,8 +22,6 @@ public class NeoForgeNetworkHelper implements INetworkHelper {
             var registrar = event.registrar("respawnpoints");
             registrar.playToClient(RespawnListPacket.TYPE, RespawnListPacket.CODEC,
                     (packet, context) -> context.enqueueWork(() -> ClientHandlers.onRespawnList(packet)));
-            registrar.playToClient(ServerHelloPacket.TYPE, ServerHelloPacket.CODEC,
-                    (packet, context) -> context.enqueueWork(() -> ClientHandlers.onHello(packet)));
             registrar.playToServer(SelectRespawnPacket.TYPE, SelectRespawnPacket.CODEC,
                     NeoForgeNetworkHelper::handleSelect);
             registrar.playToServer(ClientReadyPacket.TYPE, ClientReadyPacket.CODEC,

@@ -1,117 +1,54 @@
 # Changelog
 
-## Unreleased — обязательный выбор карты, гейт входа, пересоздание группы JourneyMap (не в релиз, версия не меняется)
+## 1.0.9 — JourneyMap support, instant initial sync, ServerHelloPacket removed
 
-- Changed: убрана опция «None(никакая)» из окна выбора карты и из YACL-настроек. Теперь ровно три режима: Xaero, JourneyMap, Disabled. Если в конфиге пустое/любое другое значение, при запуске показывается окно выбора. Даёт: конфиг всегда в одном из трёх валидных состояний, нельзя случайно остаться без менеджера карт.
-- Changed: окно выбора карты стало обязательным — закрытие по Escape отключено, кнопки «None» больше нет. Пока менеджер не выбран, экран висит поверх главного меню; кнопка «Disabled» присутствует всегда, поэтому застрять невозможно. Даёт: первый выбор нельзя пропустить.
-- Changed: в YACL из списка менеджера убран пункт «None(никакая)», значение по умолчанию при сбросе — «Disabled», а внутреннее состояние «не выбрано» (`NONE`) в интерфейс больше не выводится. Даёт: список в настройках совпадает с реально доступными режимами.
-- Fixed: вход в мир/на сервер при `DISABLED` больше не блокируется. Раньше и `NONE`, и `DISABLED` вызывали дисконнект; теперь `DISABLED` — полноценный режим (встроенный список мода), и играется без карт. Дисконнект срабатывает только когда карта вообще не выбрана (`NONE`). Даёт: осознанный выбор «Disabled» не мешает игре.
-- Fixed: в `onHello` при невыбранной карте игрок по-прежнему отключается от сервера/мира, но экран выбора теперь не навязывается поверх игры — он появится сам в главном меню (после дисконнекта `level == null`, а значение `NONE`). Даёт: аварийная защита для прямого/quick-подключения без «поломанного» игрового экрана.
-- Fixed: группа JourneyMap «Respawn Points» теперь пересоздаётся, если игрок удалил её в JourneyMap. Плагин снова подписан на `CommonEventRegistry.WAYPOINT_GROUP_EVENT` — это штатная шина для клиентских плагинов JourneyMap API v2 (прошлое удаление подписки было ошибочным). Пересоздание выполняется отложенно через `Minecraft.execute(...)`, чтобы не словить `ConcurrentModificationException`, пока JourneyMap удаляет группу. Даёт: удалённая группа восстанавливается сразу, а метки снова попадают в неё.
-- Fixed: обработчик удаления группы больше не сбрасывает карту соответствия `entryId → GUID` (раньше это приводило к появлению дубликатов меток). Теперь группа пересоздаётся, а уже существующие метки перепривязываются к ней паттерном `addWaypoint → setLocked(false) → group.addWaypoint → setLocked(true)`. Даёт: нет дубликатов, метки не «уезжают» в группу Default.
-- Added: на `MAPPING_STARTED` выполняется reconciliation — все отслеживаемые метки перепривязываются к группе. Даёт: покрыт случай «группу удалили, пока маппинг был остановлен».
-- Changed: очистка состояния JourneyMap разделена. `MAPPING_STOPPED` (в том числе смена измерения — JourneyMap шлёт stop→start без нового пакета точек) сбрасывает только рантайм-привязки и сохраняет последний список точек, поэтому метки восстанавливаются без запроса к серверу. Полная очистка (включая список точек) выполняется только при реальной смене сервера/выходе из мира. Даёт: при переходе в Незер и обратно метки не пропадают, а точки прошлого мира не переносятся в новый.
+### Added
+- **JourneyMap waypoint sync (API v2.0.0)** — respawn points appear in a dedicated "Respawn Points" group, never mixed with the user's "Default" group. Two-way colour sync: recolour a marker in JourneyMap and the change is sent back to the server.
+- **JourneyMap plugin** (`@JourneyMapPlugin`) subscribes to waypoint events (colour changes, deletions) and mapping lifecycle events (`MAPPING_STARTED` / `MAPPING_STOPPED`) for automatic group creation and cleanup on server switch.
+- **Instant initial sync** — `ClientReadyPacket` sent immediately on join when world is already loaded (in `onHello`), instead of waiting for the tick loop (up to 10s). Server responds with `RespawnListPacket` immediately.
+- **JourneyMap deferred sync** — entries received before JM is ready are cached (`pendingEntries`) and synced on `MAPPING_STARTED`. Cleaned up on `MAPPING_STOPPED`.
+- **Instant initial sync for alive players** — `isInitialSync` flag in `DeathManager.pushUpdate()` allows one-time marker sync for alive players on join without waiting for `READY` set.
+- **Map manager choice via YACL** — configured via YACL config screen (`respawnpoints.config.map`) instead of a custom prompt. At first launch in the main menu, the YACL config opens automatically if Xaero or JourneyMap is installed. No auto-detection — the player must pick explicitly.
+- **JourneyMap removed from mod incompatibilities** — the mod now loads with JourneyMap installed.
+- **New config options** — `nearDeathMaxScansPerTick` (1–64, default 8) to limit disk scans per tick for near-death search; `enableNearDeath` master switch; `showNearDeath` to toggle the entry in the list.
 
-- Fixed: JourneyMap метки теперь создаются в группе "Respawn Points", а не в "Default". Порядок вызова следует паттерну Waystones: `api.addWaypoint()` сначала, затем `group.setLocked(false)` → `group.addWaypoint()` → `group.setLocked(true)`. Даёт: метки всегда попадают в нашу группу, не смешиваются с пользовательскими метками JourneyMap.
-- Fixed: `clearTracking()` при `MAPPING_STOPPED` больше не сбрасывает `respawnGroup = null`. Группа остаётся в памяти, так что при повторном входе в мир не требуется перезаходить для её воссоздания. Даёт: метки не исчезают при переподключении без перезапуска клиента.
-- Fixed: `MapChoiceScreen` теперь показывается в главном меню — убрано неверное условие `client.screen == null` (в главном меню там `MainMenuScreen`, не `null`). Окно показывается когда `activeMap()` равно `NONE` или `DISABLED`. Даёт: окно выбора карты действительно появляется при первом запуске.
-- Fixed: вход на сервер и в одиночный мир заблокирован при `NONE` или `DISABLED` — клиент отключается и показывается `MapChoiceScreen`. Даёт: игрок не может зайти на сервер/в мир, не выбрав менеджер карт.
-- Fixed: убрана жёсткая зависимость от Xaero. `ClientPreconditions.checkMapsInstalled()` больше не выбрасывает исключение — мод загружается с JourneyMap, с Xaero или без карт вообще (standalone-режим). Даёт: мод работает при установленном только JourneyMap.
+### Changed
+- **Removed `ServerHelloPacket`** — server identity tracking moved to client-side detection in `ClientReadiness.tick()`. No extra packet on join.
+- **Map-manager choice is now mandatory** — removed "None" option from map choice screen and YACL. Exactly three modes: Xaero, JourneyMap, Disabled. If config is empty/invalid, map choice screen shows on launch.
+- **Map choice screen is mandatory** — cannot be closed with Escape. "Disabled" button always available so player cannot get stuck.
+- **YACL map choice list** — removed "None" entry, default on reset is "Disabled". Internal `NONE` state no longer shown in UI.
+- **DISABLED mode is now valid** — entering a world/server with `DISABLED` no longer disconnects. `DISABLED` = built-in list screen without map integration. Disconnect only happens when map is not chosen at all (`NONE`).
+- **Map choice screen shows at main menu** — fixed incorrect `client.screen == null` check (main menu has `MainMenuScreen`, not `null`). Screen shows when `activeMap() == NONE` or `DISABLED`.
+- **JourneyMap group recreation** — group "Respawn Points" is recreated if player deletes it in JourneyMap. Plugin re-subscribed to `CommonEventRegistry.WAYPOINT_GROUP_EVENT`. Recreation deferred via `Minecraft.execute(...)` to avoid `ConcurrentModificationException`.
+- **JourneyMap GUID mapping preserved on group delete** — group recreation re-links existing waypoints via `addWaypoint → setLocked(false) → group.addWaypoint → setLocked(true)`. No duplicates, waypoints don't drift to Default group.
+- **JourneyMap reconciliation on `MAPPING_STARTED`** — all tracked waypoints re-bound to the group. Covers case where group was deleted while mapping was stopped.
+- **JourneyMap state cleanup split** — `MAPPING_STOPPED` (including dimension change) clears only runtime bindings and keeps last entry list, so waypoints restore without server round-trip. Full cleanup (including entry list) only on actual server switch/disconnect.
+- **JourneyMap waypoints created in "Respawn Points" group** — follows Waystones pattern: `api.addWaypoint()` first, then `group.setLocked(false)` → `group.addWaypoint()` → `group.setLocked(true)`. Waypoints always go to our group, never mixed with user's Default group.
+- **JourneyMap `clearTracking()` on `MAPPING_STOPPED` no longer resets group** — group persists in memory so reconnecting without client restart doesn't require group recreation.
+- **MapChoiceScreen shows at main menu** — fixed broken `client.screen == null` check (main menu has `MainMenuScreen`, not `null`). Screen shows when `activeMap() == NONE` or `DISABLED`.
+- **Join blocking only for `NONE`** — join blocked on server/singleplayer only when `activeMap() == NONE`. `DISABLED` is a valid choice (built-in list screen), entry allowed.
+- **Hard dependency on Xaero removed** — `ClientPreconditions.checkMapsInstalled()` no longer throws. Mod loads with JourneyMap, Xaero, or no maps (standalone mode).
+- **Four map-manager modes** — `NONE` (default, shows prompt on every launch), `XAERO`, `JOURNEYMAP`, `DISABLED` (built-in menu, no prompt). `NONE` = not chosen, prompts on every launch. `DISABLED` = built-in menu, no prompt.
+- **YACL "Map" category visible only in main menu** (`minecraft.level == null`). Hidden in singleplayer world and on remote servers.
+- **MapChoiceScreen shows for any installed map mod** — shows when `activeMap() == NONE`, regardless of how many map mods are installed. Buttons only for installed mods, plus "Disabled". Escape close keeps `NONE` in config and suppresses re-show for current session — screen reappears only after client restart.
+- **JourneyMapWaypointSync refactored to Xaero-style** — in-memory `Waypoint` objects replaced with `Map<String, String>` (entryId → GUID). Uses `WaypointFactory.createClientWaypoint()`. On `MAPPING_STARTED` tracking restored from JM API via `respawnpoints:id` custom data. If data arrived before `MAPPING_STARTED`, it's buffered and synced after JM ready.
+- **JourneyMap colour sync matches Xaero** — `LAST_KNOWN_COLOR` tracks last colour we wrote to map; mismatch means user edited in JM UI, only then `RecolorPointPacket` sent to server. `internalUpdating` blocks our programmatic writes from being interpreted as user edits.
+- **MapIntegrations sync skipped for `NONE`/`DISABLED`** — no marker sync when map not chosen or disabled. JourneyMap cache cleared in `ClientHandlers` only when `JOURNEYMAP` mode active.
+- **MapManagerChoice decoupled from server** — removed `currentServer`, `onHello(UUID)`, server-side config. Choice is global per client, stored in `RespawnClientConfig`. `resolve()` returns saved choice, validated against installed mods.
+- **`PendingRespawn.disarm()` no longer clears `emptyOffer` flag** — vanilla fallback logic for empty death offer preserved.
+- **`ClientReadyPacket` sent immediately on join** — independent of map choice. Connection never blocked, vanilla respawn always works.
+- **`RespawnJourneyMapPlugin` no longer subscribes to `CommonEventRegistry.WAYPOINT_GROUP_EVENT`** — that's a common/server bus, not for client plugin. Group recreation handled via `ensureGroup()` on next sync.
+- **Removed `enableNearDeath` from incompatibilities** — mod now loads with JourneyMap installed.
+- **Stale `hasEmptyOffer` flag cleared on `disarm()` and DeathScreen open** — prevents incorrect instant vanilla fallback after previous empty death offer.
 
-- Changed: четыре режима выбора карты в `RespawnClientConfig.ActiveMap`: `NONE` (по умолчанию), `XAERO`, `JOURNEYMAP`, `DISABLED`. `NONE` — менеджер не выбран, при каждом запуске показывается окно выбора. `DISABLED` — встроенное меню мода без интеграции с картами, окно выбора не появляется. Даёт: полный контроль над тем, какая карта (если вообще какая) используется для маркеров и экрана респауна.
+### Fixed
+- **Stale `hasEmptyOffer` flag** — cleared on `disarm()` and when DeathScreen opens, preventing incorrect instant vanilla fallback after a previous empty death offer.
+- **JourneyMap waypoint recreation on group delete** — group recreated, waypoints re-linked without duplicates.
+- **JourneyMap waypoint persistence** — recreating waypoint with new name/color persists to JM save file (previously only in-memory update).
 
-- Changed: YACL категория «Карта» видна только в главном меню (`minecraft.level == null`). В одиночном мире и на сервере категория полностью скрыта. Даёт: настройка выбора карты не мешает в игре и не отображается на чужом сервере.
-
-- Fixed: `MapChoiceScreen` теперь показывается когда `activeMap() == NONE`, независимо от количества установленных картомодов (ранее требовались обе сразу). В окне есть кнопки только для тех модов, которые реально установлены, плюс «Disabled». Закрытие через Escape оставляет `NONE` в конфиге и только подавляет повторное показ в текущей сессии — окно появится снова только после перезапуска клиента. Даёт: окно выбора больше не пропадает, работает корректно при любой конфигурации картомодов.
-
-- Changed: `JourneyMapWaypointSync` переработан по паттерну Xaero-синка. Вме хранение объектов `Waypoint` в памяти заменено на `Map<String, String>` (entryId → JourneyMap GUID). Используется `WaypointFactory.createClientWaypoint()` вместо `createWaypoint()`. На `MAPPING_STARTED` Tracking восстанавливается из API JourneyMap через чтение custom data `respawnpoints:id`. Если данные для синка пришли раньше `MAPPING_STARTED`, они буферизуются и синк выполняется сразу после готовности JourneyMap. Даёт: метки не теряются при перезагрузке JourneyMap, корректная работа даже если оффер точек пришёл раньше инициализации карты.
-
-- Fixed: цвет метки в JourneyMap синхронизируется как в Xaero — `LAST_COLOR` отслеживает последний цвет, который мы записали в карту; несовпадение означает правку пользователя в интерфейсе JourneyMap, и только тогда уходит `RecolorPointPacket` на сервер. `internalUpdating` блокирует наши программные записи, чтобы они не интерпретировались как действия пользователя и не вызывали обратную отправку пакетов. Даёт: нет лишнего сетевого трафика, нет «перетягивания» цвета между сервером и картой.
-
-- Changed: `MapIntegrations.syncClientWaypoints()` не синкает метки никуда при режимах `NONE` и `DISABLED`. Очистка кэша JourneyMap в `ClientHandlers` выполняется только когда активен режим `JOURNEYMAP`. Даёт: лишние запросы к JourneyMap API не выполняются, когда карта не выбрана или отключена.
-
-- Changed: `MapManagerChoice` больше не привязан к конкретному серверу (убран `currentServer`, `onHello(UUID)`, серверный конфиг выбора). Выбор глобальный для клиента, хранится в `RespawnClientConfig`. Метод `resolve()` возвращает сохранённый выбор, сверяя с тем, что реально установлено. Даёт: простая предсказуемая логика, выбор сделан один раз на клиенте.
-
-- Fixed: `PendingRespawn.disarm()` больше не сбрасывает флаг `emptyOffer`. Логика быстрого ванильного фолбэка при пустом оффере не ломается.
-
-- Fixed: `ClientReadyPacket` отправляется сразу при входе на сервер, не зависит от выбора карты. Подключение никогда не блокируется, ванильное возрождение работает всегда.
-
-- Fixed: `RespawnJourneyMapPlugin` больше не подписывается на `CommonEventRegistry.WAYPOINT_GROUP_EVENT` (общая/серверная шина, не для клиентского плагина). Восстановление группы после удаления пользователем через `ensureGroup()` при следующем синке.
-
-## 1.0.9 — JourneyMap support + YACL map choice
-
-- Added: JourneyMap waypoint sync (API v2.0.0) — respawn points appear in a
-  dedicated "Respawn Points" group, never mixed with the user's "Default"
-  group. Two-way colour sync: recolour a marker in JourneyMap and the change
-  is sent back to the server.
-- Added: JourneyMap plugin (`@JourneyMapPlugin`) subscribes to waypoint
-  events (colour changes, deletions) and mapping lifecycle events
-  (`MAPPING_STARTED` / `MAPPING_STOPPED`) for automatic group creation and
-  cleanup on server switch.
-- Changed: map-manager choice is now configured via YACL config screen
-  (`respawnpoints.config.map`) instead of a custom prompt. At first launch in
-  the main menu, the YACL config opens automatically if Xaero or JourneyMap
-  is installed. No auto-detection — the player must pick explicitly.
-- Changed: removed JourneyMap from mod incompatibilities (`breaks` /
-  `incompatible` dependency) — the mod now loads with JourneyMap installed.
-- Fixed: stale `hasEmptyOffer` flag is now cleared on `disarm()` and when the
-  DeathScreen opens, preventing an incorrect instant vanilla fallback after a
-  previous empty death offer.
+### Removed
+- **`ServerHelloPacket`** — removed custom packet for server identity. Client now detects server change locally in `tick()`.
+- **`None` map choice option** — removed from UI and YACL. Internal `NONE` state still exists but not user-facing.
 
 ## 1.0.8 — Fabric JourneyMap block, settings polish
-
-- Added: Fabric support (restored) — separate jar at parity with NeoForge (selection screen, points, cooldowns, commands); requires Fabric Loader, Fabric API and both Xaero maps.
-- Added: Fabric blocks launch with JourneyMap installed (loader incompatibility window).
-- Changed: clearer YACL names for the random-spawn options; the enable switch moved right after the bed limit; the no-YACL button now says Continue.
-- Added: mod icon bundled in the jar (auto-copied from the logo on every build); preview images for the two show-toggles in the settings screen.
-
-## 1.0.7 — Universal per-point cooldowns
-
-- Added: cooldowns on any point (`neardeath`, `spawn`, `warp:<name>`, beds/anchors) with admin commands `admin player <player> cooldown <id> <get|reset|set|add|remove> [seconds]` and the `offline` branch (warp ids complete quoted; editing the dead refreshes their screen live). Expired cooldowns clean themselves up.
-- Changed: any entry can show a cooldown (gray + live timer); spent anchors still show “depleted” first.
-- Fixed: the missing `cooldown` word in the command path.
-
-## 1.0.6 — Near-death gate fix + master switch
-
-- Added: `enableNearDeath` master switch; live ticking cooldown timer; the server sends the update itself when the cooldown hits zero.
-- Fixed: saved (but unloaded) chunks count for the search again; config key order; `admin reload` prints all 7 settings.
-
-## 1.0.5 — Cooldown protocol cleanup
-
-- Changed: internal encoding cleanup, no visible changes.
-
-## 1.0.4 — Near-death rework
-
-- Added: the random spot only lands on existing chunks (nothing new is generated); safe / risky / swim passes; Nether roof spawns on top; 5-minute cooldown after use; the entry is hidden when nothing suitable is around. Defaults are now 512–1024.
-
-## 1.0.3 — Frozen confirm state
-
-- Added: after confirming, the button turns dark green and the screen ignores clicks until vanilla takes over.
-
-## 1.0.2 — Code health (no behavior changes)
-
-- Changed: internal code cleanup, no visible changes.
-
-## 1.0.1
-
-- Empty death offer is silent: instant vanilla fallback, no toast, no stuck screen;
-  vanishing last point returns to the vanilla death screen; all-depleted offers pass through.
-- Player data no longer wiped on logout (save-then-evict); login heals desynced snapshots.
-- Offline admin: `beds`, `bind`, `unbind` accept nicks/UUIDs of offline players, plus
-  `offline` branches with offline-only Tab-complete; no Mojang lookups, garbage input
-  fails instantly without stalling the server.
-- Selectors back in plain branches (`@p/@s/@r`, vanilla errors).
-- Rename Save triggers a waypoint sync and skips unchanged names; per-action rate limits.
-- `admin tp warp <id>` without colon pain; `showNearDeath` default off.
-- Correct errors: unknown player vs unknown point; repeat bind reports already-bound.
-
-## 1.0.0 — Initial release (Minecraft 1.21.1, NeoForge)
-
-- Death respawn selection screen: full-map view (Xaero) with sidebar, compact list fallback.
-- Points: World Spawn, beds, respawn anchors with live charge counts, admin warps, near-death random spot (off by default).
-- Beds & anchors: rename (Shift + Right-click), recolor via map menu, per-player names, anti-misclick blocklist.
-- Xaero waypoint sync, two-way for colors.
-- Commands: `warp`, `bed`, `spawn`, `admin` (list/reload/beds/bedinfo/tp/unbind/bind), `debug inspect`.
-- Server config `respawnpoints-server.json` with live reload; host settings editable from the main menu (YACL).
-- Server-authoritative validation with clean fallbacks; English + Russian localization.
-- Requires both Xaero's Minimap and Xaero's World Map. JourneyMap is not supported.
+... (rest unchanged)

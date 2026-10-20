@@ -25,7 +25,7 @@
             "com.vlogf.respawnpoints.fabric.ModMenuIntegration"
         ],
         "journeymap": [
-            "com.vlogf.respawnpoints.integration.journeymap.RespawnJourneyMapPlugin"
+            "com.vlogf.respawnpoints.integration.journeymap.JourneyMapIntegration"
         ]
     },
     "mixins": [

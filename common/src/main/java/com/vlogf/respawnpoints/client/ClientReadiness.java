@@ -3,6 +3,7 @@ package com.vlogf.respawnpoints.client;
 import com.vlogf.respawnpoints.Constants;
 import com.vlogf.respawnpoints.client.RespawnClientConfig;
 import com.vlogf.respawnpoints.client.screen.MapChoiceScreen;
+import com.vlogf.respawnpoints.integration.MapIntegrations;
 import com.vlogf.respawnpoints.network.ClientReadyPacket;
 import com.vlogf.respawnpoints.platform.Services;
 import net.minecraft.client.Minecraft;
@@ -28,8 +29,8 @@ public final class ClientReadiness {
     private static boolean waiting;
     private static long waitStartNs;
     private static long lastReadyNs;
-    /** Защита от повторного срабатывания блокировки входа в одиночный мир. */
-    private static boolean singleplayerEntryBlocked;
+    /** Last known server UUID — used to detect world change and reset entry block. */
+    private static java.util.UUID lastServerId;
 
     private ClientReadiness() {
     }
@@ -39,6 +40,15 @@ public final class ClientReadiness {
         readySent = false;
         ticks = 0;
         waiting = false;
+
+        // If world is already loaded (join after map choice was made), send ready immediately
+        // instead of waiting for the tick loop (up to 10s). This restores instant initial sync.
+        var minecraft = Minecraft.getInstance();
+        if (minecraft.level != null) {
+            Services.NETWORK.sendToServer(new ClientReadyPacket());
+            readySent = true;
+            lastReadyNs = System.nanoTime();
+        }
     }
 
     public static synchronized void onDisconnect() {
@@ -46,7 +56,7 @@ public final class ClientReadiness {
         readySent = false;
         ticks = 0;
         waiting = false;
-        singleplayerEntryBlocked = false;
+        lastServerId = null;
         PendingRespawn.clear();
     }
 
@@ -56,17 +66,30 @@ public final class ClientReadiness {
 
     /** Client tick: send readiness once the world (and the chosen map) is up. */
     public static void tick() {
-        var early = Minecraft.getInstance();
-        // Блокируем вход в одиночный мир, если карта не выбрана (NONE).
-        // DISABLED — валидный выбор (встроенное меню), вход разрешён.
-        if (early.level != null
+        var minecraft = Minecraft.getInstance();
+        // Detect world change (new server UUID) and reset entry block state.
+        if (minecraft.level != null) {
+            var server = minecraft.getSingleplayerServer();
+            java.util.UUID currentId = server != null ? getServerIdentity(server) : getRemoteServerIdentity(minecraft);
+            if (currentId != null && !currentId.equals(lastServerId)) {
+                lastServerId = currentId;
+                singleplayerEntryBlocked = false; // Allow re-check for new world
+                // Clear tracking for Xaero and JourneyMap on server change
+                clearXaeroTracking();
+                clearJourneyMapTracking();
+            }
+        }
+
+        // Block entry into singleplayer world if map not chosen (NONE).
+        // DISABLED — valid choice (built-in menu), entry allowed.
+        if (minecraft.level != null
                 && RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE
                 && !singleplayerEntryBlocked) {
             singleplayerEntryBlocked = true;
-            early.disconnect();
-            if (early.screen == null
-                    || !(early.screen instanceof MapChoiceScreen)) {
-                early.setScreen(new MapChoiceScreen());
+            minecraft.disconnect();
+            if (minecraft.screen == null
+                    || !(minecraft.screen instanceof MapChoiceScreen)) {
+                minecraft.setScreen(new MapChoiceScreen());
             }
             return;
         }
@@ -74,7 +97,7 @@ public final class ClientReadiness {
         // looked alive (NeoForge early event) is kept for ARM_GRACE so the
         // DeathScreen can still open; only truly stale arms are dropped.
         // Disarm keeps live marker entries intact.
-        if (early.player != null && early.player.isAlive() && PendingRespawn.hasPending()) {
+        if (minecraft.player != null && minecraft.player.isAlive() && PendingRespawn.hasPending()) {
             long age = System.nanoTime() - PendingRespawn.setNanos();
             if (age > ARM_GRACE_NS) {
                 PendingRespawn.disarm();
@@ -84,7 +107,7 @@ public final class ClientReadiness {
         // is resent as a cached pending instead of hanging forever.
         boolean doRetry = false;
         synchronized (ClientReadiness.class) {
-            if (waiting && helloReceived && early.screen instanceof net.minecraft.client.gui.screens.DeathScreen
+            if (waiting && helloReceived && minecraft.screen instanceof net.minecraft.client.gui.screens.DeathScreen
                     && System.nanoTime() - lastReadyNs > READY_RETRY_NS) {
                 lastReadyNs = System.nanoTime();
                 doRetry = true;
@@ -98,7 +121,6 @@ public final class ClientReadiness {
             if (!helloReceived || readySent) {
                 return;
             }
-            var minecraft = Minecraft.getInstance();
             if (minecraft.level == null) {
                 // World not loaded yet: don't burn the tick budget.
                 return;
@@ -174,5 +196,54 @@ public final class ClientReadiness {
 
     public static synchronized void clearWaiting() {
         waiting = false;
+    }
+
+    /** Extract server identity from integrated server. */
+    private static java.util.UUID getServerIdentity(net.minecraft.server.MinecraftServer server) {
+        try {
+            var field = net.minecraft.server.MinecraftServer.class.getDeclaredField("serverId");
+            field.setAccessible(true);
+            return (java.util.UUID) field.get(server);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Extract server identity from remote connection. */
+    private static java.util.UUID getRemoteServerIdentity(Minecraft minecraft) {
+        try {
+            var connection = minecraft.getConnection();
+            if (connection == null) return null;
+            var field = connection.getClass().getDeclaredField("serverId");
+            field.setAccessible(true);
+            return (java.util.UUID) field.get(connection);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Protection against repeated singleplayer entry block trigger. */
+    private static boolean singleplayerEntryBlocked;
+
+    private static void clearXaeroTracking() {
+        if (!Services.PLATFORM.isModLoaded("xaerominimap")) {
+            return;
+        }
+        try {
+            Class<?> sync = Class.forName("com.vlogf.respawnpoints.integration.xaero.XaeroWaypointSync");
+            sync.getMethod("clearTracking").invoke(null);
+        } catch (ReflectiveOperationException | LinkageError e) {
+            // Best effort only.
+        }
+    }
+
+    private static void clearJourneyMapTracking() {
+        if (MapManagerChoice.resolve() != RespawnClientConfig.ActiveMap.JOURNEYMAP) {
+            return;
+        }
+        if (!Services.PLATFORM.isModLoaded("journeymap")) {
+            return;
+        }
+        MapIntegrations.clearJourneyMapTracking();
     }
 }

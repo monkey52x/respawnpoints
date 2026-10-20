@@ -110,6 +110,8 @@
   "respawnpoints.config.neardeath_min_desc": "Min distance of the random spot (0-1024).",
   "respawnpoints.config.neardeath_cooldown": "Random respawn cooldown",
   "respawnpoints.config.neardeath_cooldown_desc": "Seconds after using the random spot before it works again (0 = disabled).",
+  "respawnpoints.config.neardeath_max_scans": "Max chunk scans per tick",
+  "respawnpoints.config.neardeath_max_scans_desc": "Max disk chunk scans per server tick for random spot search (1-64). Lower = less lag, slower search.",
   "respawnpoints.config.show_spawn": "Show spawn",
   "respawnpoints.config.show_spawn_desc": "Offer the world spawn point.",
   "respawnpoints.config.show_neardeath": "Show random spot in list",

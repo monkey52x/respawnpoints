@@ -110,6 +110,8 @@
   "respawnpoints.config.neardeath_min_desc": "Мин. дистанция случайной точки (0–1024).",
   "respawnpoints.config.neardeath_cooldown": "Кулдаун возрождения",
   "respawnpoints.config.neardeath_cooldown_desc": "Секунд после случайного возрождения до повторного (0 = выкл).",
+  "respawnpoints.config.neardeath_max_scans": "Макс. сканов чанков за тик",
+  "respawnpoints.config.neardeath_max_scans_desc": "Макс. дисковых сканов чанков за тик сервера для поиска случайной точки (1–64). Меньше = меньше лагов, медленнее поиск.",
   "respawnpoints.config.show_spawn": "Показывать спавн",
   "respawnpoints.config.show_spawn_desc": "Предлагать точку мирового спавна.",
   "respawnpoints.config.show_neardeath": "Показывать точку в списке",

@@ -39,12 +39,7 @@ public record RespawnListPacket(List<RespawnEntry> entries, boolean liveSync, lo
             entries.add(RespawnEntry.read(buf));
         }
         boolean live = buf.readBoolean();
-        long id = 0L;
-        try {
-            id = buf.readVarLong();
-        } catch (Exception ignored) {
-            // Old servers omit the generation id.
-        }
+        long id = buf.readVarLong(); // Always present in protocol; 0 = live sync / no offer
         return new RespawnListPacket(List.copyOf(entries), live, id);
     }
 
