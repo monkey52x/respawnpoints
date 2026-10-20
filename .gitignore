@@ -15,3 +15,13 @@ hs_err_pid*
 ROADMAP.md
 # Local changelog draft history, not for the repo.
 CHANGELOG.md.bak
+# Temporary build output files
+build_output*.txt
+test_output.txt
+write_test.txt
+jar_snapshot.txt
+commit_msg.txt
+# IDE/editor files
+*.swp
+*.swo
+*~
