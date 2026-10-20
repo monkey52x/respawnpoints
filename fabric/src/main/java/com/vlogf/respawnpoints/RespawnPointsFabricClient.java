@@ -1,6 +1,5 @@
 package com.vlogf.respawnpoints;
 
-import com.vlogf.respawnpoints.client.ClientBedActions;
 import com.vlogf.respawnpoints.client.ClientPreconditions;
 import com.vlogf.respawnpoints.client.ClientReadiness;
 import com.vlogf.respawnpoints.client.MapManagerChoice;
@@ -20,22 +19,21 @@ public class RespawnPointsFabricClient implements ClientModInitializer {
     public void onInitializeClient() {
         ClientPreconditions.checkMapsInstalled();
         FabricNetworkHelper.registerClientReceivers();
+        FabricNetworkHelper.registerDisconnectHandler();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClientReadiness.tick();
-            // В главном меню (уровень не загружен): если выбор карты не сделан
-            // (NONE) — показываем обязательный MapChoiceScreen. DISABLED —
-            // валидный выбор, экран при нём не показывается.
+            // In main menu (level not loaded): if map choice not made
+            // (NONE) — show mandatory MapChoiceScreen. DISABLED —
+            // valid choice, screen does not show at it.
             if (client.level == null
                     && !(client.screen instanceof MapChoiceScreen)
                     && RespawnClientConfig.activeMap() == RespawnClientConfig.ActiveMap.NONE) {
                 client.setScreen(new MapChoiceScreen());
             }
         });
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
-                ClientReadiness.onDisconnect());
-        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+        net.fabricmc.fabric.api.event.player.UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (world.isClientSide() && player instanceof net.minecraft.client.player.LocalPlayer local
-                    && ClientBedActions.handleSneakUse(world, local, hitResult.getBlockPos())) {
+                    && com.vlogf.respawnpoints.client.ClientBedActions.handleSneakUse(world, local, hitResult.getBlockPos())) {
                 return InteractionResult.SUCCESS;
             }
             return InteractionResult.PASS;

@@ -5,6 +5,7 @@ import com.vlogf.respawnpoints.integration.MapIntegrations;
 import com.vlogf.respawnpoints.mixin.DeathScreenAccessor;
 import com.vlogf.respawnpoints.model.RespawnEntry;
 import com.vlogf.respawnpoints.network.RespawnListPacket;
+import com.vlogf.respawnpoints.network.ServerHelloPacket;
 import com.vlogf.respawnpoints.platform.Services;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.DeathScreen;
@@ -15,18 +16,17 @@ public final class ClientHandlers {
     private ClientHandlers() {
     }
 
-    public static void onHello() {
+    public static void onHello(ServerHelloPacket packet) {
         var activeMap = RespawnClientConfig.activeMap();
         if (activeMap == RespawnClientConfig.ActiveMap.NONE) {
             // Map not chosen: don't let player into server/world, disconnect.
             // Map choice screen is mandatory and will appear in main menu
-            // (tick hook sees NONE when level == null). DISABLED entry is allowed.
+            // (tick hook sees NONE when level == null). DISABLED entry allowed.
             Minecraft.getInstance().disconnect();
             return;
         }
         com.vlogf.respawnpoints.client.PendingRespawn.clear();
-        ClientReadiness.onHello();
-        // Server change detection is now handled in ClientReadiness.tick()
+        ClientReadiness.onHello(packet.serverId());
     }
 
     public static void onRespawnList(RespawnListPacket packet) {

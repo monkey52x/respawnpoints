@@ -3,10 +3,10 @@ package com.vlogf.respawnpoints.neoforge;
 import com.vlogf.respawnpoints.network.ServerHelloPacket;
 import com.vlogf.respawnpoints.platform.Services;
 import com.vlogf.respawnpoints.server.DeathManager;
-import com.vlogf.respawnpoints.server.PlayerRespawnData;
 import com.vlogf.respawnpoints.server.RespawnCommands;
 import com.vlogf.respawnpoints.server.RespawnConfig;
 import com.vlogf.respawnpoints.server.ServerIdentity;
+import com.vlogf.respawnpoints.server.ServerHandlers;
 import com.vlogf.respawnpoints.server.ServerInteractionLogic;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
@@ -18,7 +18,6 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 
-/** Server-side NeoForge hooks: death, join, commands. */
 public final class NeoForgeEvents {
     private NeoForgeEvents() {
     }
@@ -40,13 +39,15 @@ public final class NeoForgeEvents {
         });
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
             if (event.getEntity() instanceof ServerPlayer player) {
+                // Clear rate limit so initial ClientReadyPacket is never throttled
+                ServerHandlers.clearReadyRateLimit(player.getUUID());
+                // Send ServerHelloPacket (client will respond with ClientReadyPacket)
                 Services.NETWORK.sendToPlayer(player,
                         new ServerHelloPacket(ServerIdentity.get(player.server).uuid()));
                 // Clean snapshots broken while offline before the client is ready;
                 // the first push after ClientReady is already correct.
                 DeathManager.pruneOnJoin(player);
-                // Full push on login: rebuilds markers after a map-save wipe.
-                DeathManager.pushUpdate(player);
+                // pushUpdate() will be called in ServerHandlers.onReady() after ClientReadyPacket
             }
         });
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) ->

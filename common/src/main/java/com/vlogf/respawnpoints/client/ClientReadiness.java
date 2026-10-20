@@ -9,6 +9,8 @@ import com.vlogf.respawnpoints.platform.Services;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
+import java.util.UUID;
+
 /**
  * Pull-model client state. The server sends nothing marker-related until this
  * client confirms readiness (world loaded, map session up). If the player hits
@@ -35,20 +37,27 @@ public final class ClientReadiness {
     private ClientReadiness() {
     }
 
-    public static synchronized void onHello() {
+    /**
+     * Called when client receives ServerHelloPacket from server.
+     * Clears tracking if server changed, then sends ClientReadyPacket.
+     */
+    public static synchronized void onHello(UUID newServerId) {
         helloReceived = true;
         readySent = false;
         ticks = 0;
         waiting = false;
 
-        // If world is already loaded (join after map choice was made), send ready immediately
-        // instead of waiting for the tick loop (up to 10s). This restores instant initial sync.
-        var minecraft = Minecraft.getInstance();
-        if (minecraft.level != null) {
-            Services.NETWORK.sendToServer(new ClientReadyPacket());
-            readySent = true;
-            lastReadyNs = System.nanoTime();
+        // Detect server change and clear tracking
+        if (newServerId != null && !newServerId.equals(lastServerId)) {
+            lastServerId = newServerId;
+            clearXaeroTracking();
+            clearJourneyMapTracking();
         }
+
+        // Immediately respond with readiness
+        Services.NETWORK.sendToServer(new ClientReadyPacket());
+        readySent = true;
+        lastReadyNs = System.nanoTime();
     }
 
     public static synchronized void onDisconnect() {
@@ -58,6 +67,10 @@ public final class ClientReadiness {
         waiting = false;
         lastServerId = null;
         PendingRespawn.clear();
+
+        // Clear tracking on disconnect (return to main menu)
+        clearXaeroTracking();
+        clearJourneyMapTracking();
     }
 
     public static synchronized boolean hasHello() {
@@ -67,19 +80,6 @@ public final class ClientReadiness {
     /** Client tick: send readiness once the world (and the chosen map) is up. */
     public static void tick() {
         var minecraft = Minecraft.getInstance();
-        // Detect world change (new server UUID) and reset entry block state.
-        if (minecraft.level != null) {
-            var server = minecraft.getSingleplayerServer();
-            java.util.UUID currentId = server != null ? getServerIdentity(server) : getRemoteServerIdentity(minecraft);
-            if (currentId != null && !currentId.equals(lastServerId)) {
-                lastServerId = currentId;
-                singleplayerEntryBlocked = false; // Allow re-check for new world
-                // Clear tracking for Xaero and JourneyMap on server change
-                clearXaeroTracking();
-                clearJourneyMapTracking();
-            }
-        }
-
         // Block entry into singleplayer world if map not chosen (NONE).
         // DISABLED — valid choice (built-in menu), entry allowed.
         if (minecraft.level != null

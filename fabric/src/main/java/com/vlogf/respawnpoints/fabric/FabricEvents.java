@@ -3,9 +3,9 @@ package com.vlogf.respawnpoints.fabric;
 import com.vlogf.respawnpoints.network.ServerHelloPacket;
 import com.vlogf.respawnpoints.platform.Services;
 import com.vlogf.respawnpoints.server.DeathManager;
-import com.vlogf.respawnpoints.server.PlayerRespawnData;
 import com.vlogf.respawnpoints.server.RespawnCommands;
 import com.vlogf.respawnpoints.server.RespawnConfig;
+import com.vlogf.respawnpoints.server.ServerHandlers;
 import com.vlogf.respawnpoints.server.ServerIdentity;
 import com.vlogf.respawnpoints.server.ServerInteractionLogic;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -17,7 +17,6 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 
-/** Server-side Fabric hooks: death, join, commands. */
 public final class FabricEvents {
     private FabricEvents() {
     }
@@ -34,13 +33,15 @@ public final class FabricEvents {
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerPlayer player = handler.getPlayer();
+            // Clear rate limit so initial ClientReadyPacket is never throttled
+            com.vlogf.respawnpoints.server.ServerHandlers.clearReadyRateLimit(player.getUUID());
+            // Send ServerHelloPacket (client will respond with ClientReadyPacket)
             Services.NETWORK.sendToPlayer(player,
-                    new ServerHelloPacket(ServerIdentity.get(server).uuid()));
+                    new com.vlogf.respawnpoints.network.ServerHelloPacket(com.vlogf.respawnpoints.server.ServerIdentity.get(server).uuid()));
             // Clean snapshots broken while offline before the client is ready;
             // the first push after ClientReady is already correct.
             DeathManager.pruneOnJoin(player);
-            // Full push on login: rebuilds markers after a map-save wipe.
-            DeathManager.pushUpdate(player);
+            // pushUpdate() will be called in ServerHandlers.onReady() after ClientReadyPacket
         });
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
                 DeathManager.clearReady(handler.getPlayer().getUUID()));
@@ -60,18 +61,18 @@ public final class FabricEvents {
                     || !(world instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
                 return InteractionResult.PASS;
             }
-            var verdict = ServerInteractionLogic.handleUse(serverPlayer, serverLevel,
-                    hitResult.getBlockPos(), new ServerInteractionLogic.Call(
+            var verdict = com.vlogf.respawnpoints.server.ServerInteractionLogic.handleUse(serverPlayer, serverLevel,
+                    hitResult.getBlockPos(), new com.vlogf.respawnpoints.server.ServerInteractionLogic.Call(
                             player.isShiftKeyDown(),
                             player.getMainHandItem().isEmpty(),
                             player.getOffhandItem().isEmpty()));
-            if (verdict == ServerInteractionLogic.Verdict.CONSUME) {
+            if (verdict == com.vlogf.respawnpoints.server.ServerInteractionLogic.Verdict.CONSUME) {
                 serverPlayer.swing(hand, true);
                 return InteractionResult.SUCCESS;
             }
             return InteractionResult.PASS;
         });
-        CommandRegistrationCallback.EVENT.register((dispatcher, context, selection) ->
+        net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register((dispatcher, context, selection) ->
                 RespawnCommands.register(dispatcher));
     }
 }

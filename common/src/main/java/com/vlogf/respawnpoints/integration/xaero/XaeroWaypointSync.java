@@ -70,6 +70,7 @@ public final class XaeroWaypointSync {
     /** Drop in-memory baselines (e.g. on server switch): ids may repeat elsewhere. */
     public static void clearTracking() {
         LAST_COLOR.clear();
+        cachedSession = null;
     }
 
     private static void syncInner(List<RespawnEntry> entries) {

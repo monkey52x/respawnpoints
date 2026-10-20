@@ -68,6 +68,11 @@ public final class ServerHandlers {
         LAST_READY.remove(uuid);
     }
 
+    /** Clear rate limit for initial ready packet after join. */
+    public static void clearReadyRateLimit(java.util.UUID uuid) {
+        LAST_READY.remove(uuid);
+    }
+
     private static boolean validId(String id) {
         return id != null && !id.isEmpty() && id.length() <= Limits.MAX_POINT_ID;
     }
