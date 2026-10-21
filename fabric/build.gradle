@@ -43,3 +43,7 @@ loom {
         }
     }
 }
+
+tasks.named('jar', Jar) {
+    archiveFileName = "${mod_id}-${version}+mc${minecraft_version}-${project.name}.jar"
+}
