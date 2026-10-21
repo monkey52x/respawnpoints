@@ -1,0 +1,190 @@
+name: Release build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach jars to
+        type: string
+        required: true
+      versions:
+        description: Minecraft versions to rebuild, e.g. 1.21.1 (empty = all)
+        type: string
+        required: false
+      rebuild:
+        description: Rebuild even if CI has jars
+        type: boolean
+        default: false
+      attach:
+        description: Attach jars to release (off = keep as workflow artifact only)
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  find:
+    name: Find CI build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      run: ${{ steps.ci.outputs.run }}
+    steps:
+      - name: Commit of tag
+        id: sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)
+          [ -n "$sha" ]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: CI run of the commit
+        id: ci
+        if: ${{ !inputs.versions && !inputs.rebuild }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          run=$(gh run list -R "$GITHUB_REPOSITORY" -w ci.yml -c "$SHA" -L 20 --json databaseId,event \
+            -q 'map(select(.event == "push" or .event == "workflow_dispatch")) | .[0].databaseId // empty') || run=""
+          if [ -n "$run" ]; then
+            echo "CI run $run of $SHA, waiting until finished..."
+            timeout 40m gh run watch "$run" -R "$GITHUB_REPOSITORY" --exit-status -i 30 > /dev/null || run=""
+          fi
+          if [ -n "$run" ]; then
+            jars=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/artifacts?per_page=100" \
+              -q '[.artifacts[] | select((.name | startswith("jars-")) and (.expired | not))] | length') || jars=0
+            [ "${jars:-0}" -gt 0 ] || run=""
+          fi
+          if [ -n "$run" ]; then
+            echo "Jars of CI run $run found" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::notice::No CI build with jars for $SHA, will rebuild"
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: find
+    if: needs.find.outputs.run == ''
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ needs.find.outputs.sha }}
+      versions: ${{ inputs.versions }}
+
+  attach:
+    name: Attach jars to release
+    needs: [find, build]
+    if: ${{ !cancelled() && needs.find.result == 'success' && (needs.find.outputs.run != '' || needs.build.result != 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version table from commit
+        id: table
+        env:
+          SHA: ${{ needs.find.outputs.sha }}
+        run: |
+          set -euo pipefail
+          FILE=.github/release.toml
+          git fetch --no-tags --depth=1 origin "$SHA"
+          git show "FETCH_HEAD:$FILE" > release-versions.toml
+          echo "jars=build/libs" >> "$GITHUB_OUTPUT"
+
+      - name: Download jars from CI
+        uses: actions/download-artifact@v4
+        with:
+          pattern: jars-*
+          merge-multiple: true
+          path: build/libs
+          run-id: ${{ needs.find.outputs.run || github.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Collect release jars
+        id: collect
+        run: |
+          python3 -c "
+import glob, os, sys
+jars = [f for f in glob.glob('build/libs/*.jar') if not any(x in f for x in ('-sources.jar', '-javadoc.jar', '-dev.jar'))]
+print(f'found={len(jars)}')
+for j in jars:
+    print(j)
+          " > collect.log
+          cat collect.log
+          echo "found=$(grep -c '^build' collect.log)" >> "$GITHUB_OUTPUT"
+
+      - name: Attach jars to release
+        if: ${{ github.event_name == 'release' && github.event.action == 'published' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" build/libs/*.jar --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Upload as artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ env.TAG }}
+          path: build/libs/*.jar
+          retention-days: 14
+          if-no-files-found: error
+          overwrite: true
+
+      - name: Attest jars (if built here)
+      - name: Attest jars (if built here)
+        if: ${{ steps.collect.outputs.found == 'true' && needs.find.outputs.run == '' }}
+        uses: actions/attest@v4
+        with:
+          subject-path: build/libs/*.jar
+
+      - name: Fail on build errors
+        if: ${{ !cancelled() && needs.build.result == 'failure' }}
+        run: |
+          echo "::error::A Minecraft version failed to build, see its Build job."
+          exit 1
+
+  # Build workflow (called by release.yml when no CI artifacts)
+  build:
+    name: Build all versions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+      - name: Build all loaders
+        run: ./gradlew :fabric:build :neoforge:build --no-daemon
+      - name: Upload JARs
+        uses: actions/upload-artifact@v4
+        with:
+          name: jars-all
+          path: |
+            fabric/build/libs/*.jar
+            neoforge/build/libs/*.jar
+          retention-days: 7

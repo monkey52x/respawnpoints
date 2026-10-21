@@ -1,0 +1,28 @@
+# Settings for build/publish workflows. Read by .github/scripts/release.py
+
+[build]
+java = "21"
+task = ":build-{mc}"
+jars = "build/libs"
+exclude = ["*-dev*.jar", "*-sources.jar", "*-javadoc.jar"]
+
+[publish]
+name = "{mod_name} {mod_version} - MC {mc} ({loader})"
+version = "{mod_version}+mc{mc}-{loader}"
+game_version_filter = "releases"
+modrinth_classifiers = []
+modrinth_slug = "respawnpoints"
+
+[publish.versions]
+file = "gradle.properties"
+java = "java_version"
+range.fabric = "minecraft_version_range_fabric"
+range.neoforge = "minecraft_version_range_forge"
+
+[publish.loaders]
+fabric = ["fabric"]
+neoforge = ["neoforge"]
+
+[publish.dependencies]
+fabric = ["fabric-api(required){modrinth:P7dR8mSH}{curseforge:306612}"]
+neoforge = []
