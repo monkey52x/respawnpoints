@@ -40,109 +40,46 @@ env:
   TAG: ${{ inputs.tag }}
 
 jobs:
-  assets:
-    name: Prepare assets
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
-      version_type: ${{ steps.matrix.outputs.version_type }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Read version table from release tag
-        run: |
-          set -euo pipefail
-          FILE=.github/release.toml
-          git fetch --no-tags --depth=1 origin "refs/tags/$TAG:refs/tags/$TAG"
-          git show "refs/tags/$TAG:$FILE" > release-versions.toml
-
-      - name: Build matrix
-        id: matrix
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ONLY: ${{ inputs.only }}
-        run: |
-          set -euo pipefail
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets > assets.json
-          python3 .github/scripts/release.py matrix assets.json --tag "$TAG" --only "$ONLY" --versions release-versions.toml ${{ inputs.modrinth && '--modrinth' || '' }}
-
-      - name: Upload changelog and versions
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-info
-          path: |
-            changelog.md
-            release-versions.toml
-          retention-days: 1
-
   publish:
     name: Publish ${{ matrix.entry.file }}
-    needs: assets
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        entry: ${{ fromJSON(needs.assets.outputs.matrix) }}
+        entry: ${{ fromJSON('[{"file": "respawnpoints-fabric-${{ inputs.tag }}.jar", "extra": "--modrinth"}, {"file": "respawnpoints-neoforge-${{ inputs.tag }}.jar", "extra": "--modrinth"}]') }}
     env:
       FILE: ${{ matrix.entry.file }}
-      EXTRA: ${{ join(matrix.entry.extra, ' ') }}
+      EXTRA: ${{ matrix.entry.extra }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-info
-
-      - name: Resolve metadata
-        id: meta
-        run: |
-          python3 .github/scripts/release.py meta "$FILE" $EXTRA --dir dist --versions release-versions.toml --version-type "${{ needs.assets.outputs.version_type }}"
-
-      - name: Download jars
+      - name: Download JARs from release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOWNLOADS: ${{ steps.meta.outputs.downloads }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           mkdir -p dist
-          while read -r asset path; do
-            [ -n "$asset" ] && gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --output "$path"
-          done <<< "$DOWNLOADS"
+          gh release download "${{ inputs.tag }}" --repo "$GITHUB_REPOSITORY" --pattern "respawnpoints-*.jar" --output dist
 
       - name: Publish to Modrinth
-        if: ${{ inputs.modrinth && !inputs.dry_run }}
+        if: ${{ inputs.modrinth }}
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           modrinth-id: ${{ vars.MODRINTH_ID }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           modrinth-featured: false
-          files: ${{ steps.meta.outputs.files }}
-          name: ${{ steps.meta.outputs.name }}
-          version: ${{ steps.meta.outputs.version }}
-          version-type: ${{ needs.assets.outputs.version_type }}
-          loaders: ${{ steps.meta.outputs.loaders }}
-          game-versions: ${{ steps.meta.outputs.game_versions }}
-          game-version-filter: ${{ steps.meta.outputs.filter }}
-          java: ${{ steps.meta.outputs.java }}
-          dependencies: ${{ steps.meta.outputs.dependencies }}
-          changelog-file: changelog.md
+          files: dist/*.jar
+          version-type: release
           fail-mode: fail
 
       - name: Publish to CurseForge
-        if: ${{ inputs.curseforge && !inputs.dry_run }}
+        if: ${{ inputs.curseforge }}
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           curseforge-id: ${{ vars.CURSEFORGE_ID }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-          files: dist/${{ matrix.entry.file }}
-          name: ${{ steps.meta.outputs.name }}
-          version: ${{ steps.meta.outputs.version }}
-          version-type: ${{ needs.assets.outputs.version_type }}
-          loaders: ${{ steps.meta.outputs.loaders }}
-          game-versions: ${{ steps.meta.outputs.game_versions }}
-          game-version-filter: ${{ steps.meta.outputs.filter }}
-          java: ${{ steps.meta.outputs.java }}
-          dependencies: ${{ steps.meta.outputs.dependencies }}
-          changelog-file: changelog.md
+          files: dist/*.jar
+          version-type: release
           fail-mode: fail
