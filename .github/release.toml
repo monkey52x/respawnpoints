@@ -11,7 +11,7 @@ name = "{mod_name} {mod_version} - MC {mc} ({loader})"
 version = "{mod_version}+mc{mc}-{loader}"
 game_version_filter = "releases"
 modrinth_classifiers = []
-modrinth_slug = "respawnpoints"
+modrinth_slug = "jVhdi5HY"
 
 [publish.versions]
 file = "gradle.properties"
@@ -24,5 +24,19 @@ fabric = ["fabric"]
 neoforge = ["neoforge"]
 
 [publish.dependencies]
-fabric = ["fabric-api(required){modrinth:P7dR8mSH}{curseforge:306612}"]
-neoforge = []
+# Fabric: Fabric API (required), Xaero + JourneyMap + YACL — optional
+fabric = [
+  "fabric-api(required){modrinth:P7dR8mSH}{curseforge:306612}",
+  "xaero-minimap(optional){modrinth:1bokaNcj}{curseforge:263420}",
+  "xaero-world-map(optional){modrinth:NcUtCpym}{curseforge:317780}",
+  "journeymap(optional){modrinth:lfHFW1mp}{curseforge:32274}",
+  "yacl(optional){modrinth:1eAoo2KR}{curseforge:667299}"
+]
+
+# NeoForge: no Fabric API, only optional maps/yacl
+neoforge = [
+  "xaero-minimap(optional){modrinth:1bokaNcj}{curseforge:263420}",
+  "xaero-world-map(optional){modrinth:NcUtCpym}{curseforge:317780}",
+  "journeymap(optional){modrinth:lfHFW1mp}{curseforge:32274}",
+  "yacl(optional){modrinth:1eAoo2KR}{curseforge:667299}"
+]
